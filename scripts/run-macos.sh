@@ -24,6 +24,17 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+PYTHON_MAJOR=$(python3 -c 'import sys; print(sys.version_info.major)')
+PYTHON_MINOR=$(python3 -c 'import sys; print(sys.version_info.minor)')
+
+# Check if Python version is 3.10 or higher
+if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]); then
+    echo -e "${RED}❌ Python 3.10+ is required, but Python $PYTHON_VERSION is installed.${NC}"
+    echo "Upgrade with: brew install python@3.11"
+    echo "Or download from: https://www.python.org/downloads/"
+    exit 1
+fi
+
 echo -e "${GREEN}✓ Python $PYTHON_VERSION found${NC}"
 
 # Check Node.js

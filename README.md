@@ -48,9 +48,9 @@ A state-of-the-art text-to-speech web application featuring Voice Design, Voice 
 
 ### Software
 
-- Node.js 18+ and npm
-- Python 3.10+
-- PyTorch 2.0+ with CUDA or ROCm support
+- **Node.js** 18+ and npm
+- **Python** 3.10 or higher (3.9 and below are not supported)
+- **PyTorch** 2.0+ with CUDA or ROCm support
 
 ## 🚀 Quick Start
 
