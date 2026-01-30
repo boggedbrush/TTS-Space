@@ -143,6 +143,22 @@ Backend will be available at `http://localhost:8000`
 
 ## 🐳 Docker Deployment
 
+### Auto-Detect Script (Recommended)
+
+Automatically selects CPU/NVIDIA/AMD compose files:
+
+```bash
+./scripts/run-docker.sh
+```
+
+Force GPU type:
+
+```bash
+./scripts/run-docker.sh --cpu
+./scripts/run-docker.sh --nvidia
+./scripts/run-docker.sh --amd
+```
+
 ### NVIDIA GPU
 
 ```bash
@@ -153,6 +169,34 @@ docker compose up --build
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.amd.yml up --build
+```
+
+## 🧪 Docker Dev Mode (Hot Reload)
+
+Use the dev override to enable live reload for both frontend and backend.
+
+### Auto-Detect (Recommended)
+
+```bash
+./scripts/run-docker.sh --dev
+```
+
+### CPU (Docker, no GPU)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+### NVIDIA GPU
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nvidia.yml -f docker-compose.dev.yml up --build
+```
+
+### AMD GPU (ROCm)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.amd.yml -f docker-compose.dev.yml up --build
 ```
 
 ## 📁 Project Structure

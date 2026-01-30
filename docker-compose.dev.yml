@@ -1,0 +1,28 @@
+# Development overrides (hot reload + bind mounts)
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    command: npm run dev -- --hostname 0.0.0.0 --port 3000
+    environment:
+      - NODE_ENV=development
+      - BACKEND_URL=http://backend:8000
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+
+  backend:
+    command: python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - PYTHONUNBUFFERED=1
+      - WATCHFILES_FORCE_POLLING=true
+    volumes:
+      - ./backend:/app
+      - huggingface-cache:/root/.cache/huggingface
+
+volumes:
+  frontend-node-modules:
