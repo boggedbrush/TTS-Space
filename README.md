@@ -54,7 +54,37 @@ A state-of-the-art text-to-speech web application featuring Voice Design, Voice 
 
 ## 🚀 Quick Start
 
-### 1. Clone the Repository
+### Option 1: One-Liner Scripts (Recommended)
+
+These scripts auto-detect your GPU and set everything up for you:
+
+**Linux:**
+```bash
+git clone https://github.com/yourusername/TTS-Space.git && cd TTS-Space
+./scripts/run-linux.sh
+```
+
+**macOS:**
+```bash
+git clone https://github.com/yourusername/TTS-Space.git && cd TTS-Space
+./scripts/run-macos.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/yourusername/TTS-Space.git; cd TTS-Space
+.\scripts\run-windows.ps1
+```
+
+**Windows (CMD):**
+```cmd
+git clone https://github.com/yourusername/TTS-Space.git && cd TTS-Space
+scripts\run-windows.bat
+```
+
+### Option 2: Manual Setup
+
+#### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/yourusername/TTS-Space.git
@@ -147,7 +177,14 @@ TTS-Space/
 │   │   ├── services/        # TTS model manager
 │   │   └── main.py          # FastAPI app
 │   └── requirements.txt
-├── docker-compose.yml
+├── scripts/                  # Native run scripts
+│   ├── run-linux.sh         # Linux (CUDA/ROCm/CPU)
+│   ├── run-macos.sh         # macOS (MPS/CPU)
+│   ├── run-windows.bat      # Windows CMD
+│   └── run-windows.ps1      # Windows PowerShell
+├── docker-compose.yml        # Docker (base config)
+├── docker-compose.amd.yml    # Docker AMD GPU override
+├── docker-compose.nvidia.yml # Docker NVIDIA GPU override
 └── README.md
 ```
 
