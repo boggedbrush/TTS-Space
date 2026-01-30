@@ -22,6 +22,7 @@ export function AudioRecorder({
     const [recordingTime, setRecordingTime] = React.useState(0);
     const [audioBlob, setAudioBlob] = React.useState<Blob | null>(null);
     const [audioUrl, setAudioUrl] = React.useState<string | null>(null);
+    const [audioMimeType, setAudioMimeType] = React.useState<string | null>(null);
 
     const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
     const chunksRef = React.useRef<Blob[]>([]);
@@ -41,10 +42,37 @@ export function AudioRecorder({
         }
     };
 
+    const getSupportedMimeType = () => {
+        if (typeof MediaRecorder === "undefined") return null;
+        const candidates = [
+            "audio/webm;codecs=opus",
+            "audio/ogg;codecs=opus",
+            "audio/webm",
+            "audio/ogg",
+            "audio/mp4",
+        ];
+        for (const type of candidates) {
+            if (MediaRecorder.isTypeSupported(type)) {
+                return type;
+            }
+        }
+        return null;
+    };
+
+    const getExtensionForMime = (mimeType: string | null) => {
+        if (!mimeType) return "webm";
+        if (mimeType.includes("ogg")) return "ogg";
+        if (mimeType.includes("mp4")) return "m4a";
+        return "webm";
+    };
+
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
+            const preferredMimeType = getSupportedMimeType();
+            const mediaRecorder = preferredMimeType
+                ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+                : new MediaRecorder(stream);
             mediaRecorderRef.current = mediaRecorder;
             chunksRef.current = [];
 
@@ -55,9 +83,11 @@ export function AudioRecorder({
             };
 
             mediaRecorder.onstop = () => {
-                const blob = new Blob(chunksRef.current, { type: "audio/wav" });
+                const mimeType = mediaRecorder.mimeType || preferredMimeType || "audio/webm";
+                const blob = new Blob(chunksRef.current, { type: mimeType });
                 const url = URL.createObjectURL(blob);
                 setAudioBlob(blob);
+                setAudioMimeType(mimeType);
                 setAudioUrl(url);
                 stopTracks();
             };
@@ -89,6 +119,7 @@ export function AudioRecorder({
 
     const resetRecording = () => {
         setAudioBlob(null);
+        setAudioMimeType(null);
         if (audioUrl) {
             URL.revokeObjectURL(audioUrl);
             setAudioUrl(null);
@@ -98,8 +129,9 @@ export function AudioRecorder({
 
     const handleConfirm = () => {
         if (audioBlob) {
-            const file = new File([audioBlob], "recorded-audio.wav", {
-                type: "audio/wav",
+            const extension = getExtensionForMime(audioMimeType);
+            const file = new File([audioBlob], `recorded-audio.${extension}`, {
+                type: audioMimeType || audioBlob.type || "audio/webm",
             });
             onRecordingComplete(file);
         }
@@ -107,8 +139,9 @@ export function AudioRecorder({
 
     const handleTrim = () => {
         if (audioBlob && onTrim) {
-            const file = new File([audioBlob], "recorded-audio.wav", {
-                type: "audio/wav",
+            const extension = getExtensionForMime(audioMimeType);
+            const file = new File([audioBlob], `recorded-audio.${extension}`, {
+                type: audioMimeType || audioBlob.type || "audio/webm",
             });
             onTrim(file);
         }

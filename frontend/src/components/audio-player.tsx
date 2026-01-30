@@ -31,10 +31,10 @@ export function AudioPlayer({
 }: AudioPlayerProps) {
     const audioRef = React.useRef<HTMLAudioElement>(null);
     const canvasRef = React.useRef<HTMLCanvasElement>(null);
-    const animationRef = React.useRef<number>();
-    const audioContextRef = React.useRef<AudioContext>();
-    const analyserRef = React.useRef<AnalyserNode>();
-    const sourceRef = React.useRef<MediaElementAudioSourceNode>();
+    const animationRef = React.useRef<number | null>(null);
+    const audioContextRef = React.useRef<AudioContext | null>(null);
+    const analyserRef = React.useRef<AnalyserNode | null>(null);
+    const sourceRef = React.useRef<MediaElementAudioSourceNode | null>(null);
 
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [currentTime, setCurrentTime] = React.useState(0);
@@ -97,7 +97,7 @@ export function AudioPlayer({
         }
 
         return () => {
-            if (animationRef.current) {
+            if (animationRef.current !== null) {
                 cancelAnimationFrame(animationRef.current);
             }
         };
@@ -141,7 +141,7 @@ export function AudioPlayer({
     React.useEffect(() => {
         if (isPlaying) {
             drawWaveform();
-        } else if (animationRef.current) {
+        } else if (animationRef.current !== null) {
             cancelAnimationFrame(animationRef.current);
         }
     }, [isPlaying, drawWaveform]);
