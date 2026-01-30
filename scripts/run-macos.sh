@@ -16,16 +16,24 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
+# Check Python - try versioned installations first (Homebrew often installs as python3.X)
+PYTHON_CMD=""
+for version in python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v $version &> /dev/null; then
+        PYTHON_CMD=$version
+        break
+    fi
+done
+
+if [ -z "$PYTHON_CMD" ]; then
     echo -e "${RED}❌ Python 3 is required but not installed.${NC}"
     echo "Install with: brew install python3"
     exit 1
 fi
 
-PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-PYTHON_MAJOR=$(python3 -c 'import sys; print(sys.version_info.major)')
-PYTHON_MINOR=$(python3 -c 'import sys; print(sys.version_info.minor)')
+PYTHON_VERSION=$($PYTHON_CMD -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+PYTHON_MAJOR=$($PYTHON_CMD -c 'import sys; print(sys.version_info.major)')
+PYTHON_MINOR=$($PYTHON_CMD -c 'import sys; print(sys.version_info.minor)')
 
 # Check if Python version is 3.10 or higher
 if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]); then
@@ -35,7 +43,7 @@ if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" 
     exit 1
 fi
 
-echo -e "${GREEN}✓ Python $PYTHON_VERSION found${NC}"
+echo -e "${GREEN}✓ Python $PYTHON_VERSION found (using $PYTHON_CMD)${NC}"
 
 # Check Node.js
 if ! command -v node &> /dev/null; then
@@ -64,7 +72,7 @@ cd "$PROJECT_DIR/backend"
 
 if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv venv
+    $PYTHON_CMD -m venv venv
 fi
 
 source venv/bin/activate
