@@ -55,6 +55,11 @@ class TTSManager:
         """Detect the best available compute device."""
         if torch.cuda.is_available():
             return "cuda:0"
+        
+        # Check for Apple Silicon (MPS)
+        if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            return "mps"
+            
         # Check for ROCm (AMD GPU)
         try:
             if hasattr(torch.version, 'hip') and torch.version.hip is not None:
@@ -200,14 +205,20 @@ class TTSManager:
         with self._model_lock:
             if model_key in self._models:
                 del self._models[model_key]
-                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                elif hasattr(torch, 'mps') and torch.mps.is_available():
+                    torch.mps.empty_cache()
                 logger.info(f"Unloaded model: {model_key}")
 
     def unload_all(self):
         """Unload all models."""
         with self._model_lock:
             self._models.clear()
-            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            elif hasattr(torch, 'mps') and torch.mps.is_available():
+                torch.mps.empty_cache()
             logger.info("Unloaded all models")
 
 

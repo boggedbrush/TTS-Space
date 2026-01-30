@@ -35,6 +35,8 @@ async def lifespan(app: FastAPI):
     if torch.cuda.is_available():
         device = torch.cuda.get_device_name(0)
         logger.info(f"CUDA available: {device}")
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        logger.info("Apple Silicon GPU (MPS) available")
     elif hasattr(torch, 'hip') and torch.hip.is_available():
         logger.info("ROCm (AMD GPU) available")
     else:

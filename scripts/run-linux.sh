@@ -16,26 +16,42 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
+# Check Python - try versioned installations first
+PYTHON_CMD=""
+for version in python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v $version &> /dev/null; then
+        PYTHON_CMD=$version
+        break
+    fi
+done
+
+if [ -z "$PYTHON_CMD" ]; then
     echo -e "${RED}❌ Python 3 is required but not installed.${NC}"
     echo "Install with: sudo apt install python3 python3-pip python3-venv"
+    echo "Or on Arch: sudo pacman -S python"
     exit 1
 fi
 
-PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-PYTHON_MAJOR=$(python3 -c 'import sys; print(sys.version_info.major)')
-PYTHON_MINOR=$(python3 -c 'import sys; print(sys.version_info.minor)')
+PYTHON_VERSION=$($PYTHON_CMD -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+PYTHON_MAJOR=$($PYTHON_CMD -c 'import sys; print(sys.version_info.major)')
+PYTHON_MINOR=$($PYTHON_CMD -c 'import sys; print(sys.version_info.minor)')
 
-# Check if Python version is 3.10 or higher
+# Check if Python version is 3.10-3.13 (3.14+ has compatibility issues)
 if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]); then
     echo -e "${RED}❌ Python 3.10+ is required, but Python $PYTHON_VERSION is installed.${NC}"
-    echo "Install with: sudo apt install python3.10 python3.10-venv"
-    echo "Or download from: https://www.python.org/downloads/"
+    echo "Install with: sudo apt install python3.11 python3.11-venv"
+    echo "Or on Arch: sudo pacman -S python311"
     exit 1
 fi
 
-echo -e "${GREEN}✓ Python $PYTHON_VERSION found${NC}"
+if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 14 ]; then
+    echo -e "${RED}❌ Python 3.14+ is too new. Python 3.10-3.13 is required.${NC}"
+    echo "Install Python 3.13: sudo apt install python3.13 python3.13-venv"
+    echo "Or on Arch: sudo pacman -S python313"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Python $PYTHON_VERSION found (using $PYTHON_CMD)${NC}"
 
 # Check Node.js
 if ! command -v node &> /dev/null; then
@@ -53,10 +69,18 @@ if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
     GPU_TYPE="cuda"
     GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -n1)
     echo -e "${GREEN}✓ NVIDIA GPU detected: $GPU_NAME${NC}"
-elif command -v rocm-smi &> /dev/null && rocm-smi &> /dev/null; then
-    GPU_TYPE="rocm"
-    GPU_NAME=$(rocm-smi --showproductname | grep "Card series" | head -n1 | cut -d: -f2 | xargs)
-    echo -e "${GREEN}✓ AMD GPU detected: $GPU_NAME${NC}"
+elif command -v rocminfo &> /dev/null; then
+    # Check if ROCm can actually detect GPU
+    if rocminfo | grep -qi "gfx\|Radeon"; then
+        GPU_TYPE="rocm"
+        GPU_NAME=$(rocminfo | grep "Marketing Name:" | grep -i "radeon" | head -n1 | cut -d: -f2 | xargs)
+        if [ -z "$GPU_NAME" ]; then
+            GPU_NAME="AMD GPU"
+        fi
+        echo -e "${GREEN}✓ AMD GPU detected: $GPU_NAME${NC}"
+    else
+        echo -e "${YELLOW}⚠ rocminfo found but no GPU detected, using CPU${NC}"
+    fi
 else
     echo -e "${YELLOW}⚠ No GPU detected, using CPU (will be slower)${NC}"
 fi
@@ -68,7 +92,7 @@ cd "$PROJECT_DIR/backend"
 
 if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
-    python3 -m venv venv
+    $PYTHON_CMD -m venv venv
 fi
 
 source venv/bin/activate
