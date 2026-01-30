@@ -41,76 +41,100 @@ export function AudioTrimmer({
     React.useEffect(() => {
         if (!open || !audioFile || !containerRef.current) return;
 
+        // Clean up previous instance if exists (double safety)
+        if (wavesurferRef.current) {
+            wavesurferRef.current.destroy();
+            wavesurferRef.current = null;
+        }
+
         const url = URL.createObjectURL(audioFile);
+        console.log("AudioTrimmer: Initializing with URL", url);
 
-        const ws = WaveSurfer.create({
-            container: containerRef.current,
-            waveColor: "hsl(262 83% 58%)",
-            progressColor: "hsl(330 81% 60%)",
-            cursorColor: "hsl(330 81% 60%)",
-            barWidth: 2,
-            barGap: 1,
-            barRadius: 2,
-            height: 128,
-            normalize: true,
-            minPxPerSec: 50,
-        });
+        // Slight delay to ensure Dialog animation has finished and container has width
+        const initTimer = setTimeout(() => {
+            if (!containerRef.current) return;
 
-        const wsRegions = RegionsPlugin.create();
-        ws.registerPlugin(wsRegions);
+            try {
+                const ws = WaveSurfer.create({
+                    container: containerRef.current,
+                    waveColor: "hsl(262 83% 58%)",
+                    progressColor: "hsl(330 81% 60%)",
+                    cursorColor: "hsl(330 81% 60%)",
+                    barWidth: 2,
+                    barGap: 1,
+                    barRadius: 2,
+                    height: 128,
+                    normalize: true,
+                    minPxPerSec: 50,
+                });
 
-        ws.load(url);
+                const wsRegions = RegionsPlugin.create();
+                ws.registerPlugin(wsRegions);
 
-        ws.on("ready", () => {
-            const dur = ws.getDuration();
-            setDuration(dur);
-            setRegionEnd(dur);
+                ws.load(url);
 
-            // Add a default region covering the whole track
-            wsRegions.addRegion({
-                start: 0,
-                end: dur,
-                color: "rgba(236, 72, 153, 0.2)", // Pinkish
-                drag: true,
-                resize: true,
-            });
-        });
+                ws.on("ready", () => {
+                    console.log("AudioTrimmer: WaveSurfer ready");
+                    const dur = ws.getDuration();
+                    setDuration(dur);
+                    setRegionEnd(dur);
 
-        ws.on("audioprocess", () => {
-            const curr = ws.getCurrentTime();
-            setCurrentTime(curr);
+                    // Add a default region covering the whole track
+                    wsRegions.addRegion({
+                        start: 0,
+                        end: dur,
+                        color: "rgba(236, 72, 153, 0.2)", // Pinkish
+                        drag: true,
+                        resize: true,
+                    });
+                });
 
-            // Loop region logic
-            if (regionsRef.current) {
-                const regions = regionsRef.current.getRegions();
-                if (regions.length > 0) {
-                    const region = regions[0];
-                    if (curr >= region.end) {
-                        ws.seekTo(region.start / ws.getDuration());
+                ws.on("audioprocess", () => {
+                    const curr = ws.getCurrentTime();
+                    setCurrentTime(curr);
+
+                    // Loop region logic
+                    if (regionsRef.current) {
+                        const regions = regionsRef.current.getRegions();
+                        if (regions.length > 0) {
+                            const region = regions[0];
+                            if (curr >= region.end) {
+                                ws.seekTo(region.start / ws.getDuration());
+                            }
+                        }
                     }
-                }
+                });
+
+                ws.on("finish", () => {
+                    setIsPlaying(false);
+                });
+
+                ws.on("error", (err) => {
+                    console.error("AudioTrimmer: WaveSurfer error", err);
+                });
+
+                wsRegions.on("region-updated", (region) => {
+                    setRegionStart(region.start);
+                    setRegionEnd(region.end);
+                });
+
+                ws.on("interaction", () => {
+                    // Optional: handle seek
+                });
+
+                wavesurferRef.current = ws;
+                regionsRef.current = wsRegions;
+            } catch (err) {
+                console.error("AudioTrimmer: Initialization error", err);
             }
-        });
-
-        ws.on("finish", () => {
-            setIsPlaying(false);
-        });
-
-        wsRegions.on("region-updated", (region) => {
-            setRegionStart(region.start);
-            setRegionEnd(region.end);
-        });
-
-        // Click on waveform seeks
-        ws.on("interaction", () => {
-            // Optional: handle seek
-        });
-
-        wavesurferRef.current = ws;
-        regionsRef.current = wsRegions;
+        }, 100);
 
         return () => {
-            ws.destroy();
+            clearTimeout(initTimer);
+            if (wavesurferRef.current) {
+                wavesurferRef.current.destroy();
+                wavesurferRef.current = null;
+            }
             URL.revokeObjectURL(url);
         };
     }, [open, audioFile]);
