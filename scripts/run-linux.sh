@@ -124,25 +124,61 @@ fi
 # Start services
 echo ""
 echo "🚀 Starting services..."
-echo "   Frontend: http://localhost:3000"
-echo "   Backend:  http://localhost:8000"
-echo ""
-echo -e "${YELLOW}Press Ctrl+C to stop both services${NC}"
-echo ""
 
 # Start backend in background
 cd "$PROJECT_DIR/backend"
 source venv/bin/activate
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 2>&1 &
 BACKEND_PID=$!
 
-# Start frontend
+# Start frontend in background
 cd "$PROJECT_DIR/frontend"
-npm run dev &
+npm run dev 2>&1 &
 FRONTEND_PID=$!
 
 # Trap Ctrl+C to kill both processes
-trap "echo ''; echo 'Shutting down...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit 0" SIGINT SIGTERM
+cleanup() {
+    echo ""
+    echo "Shutting down..."
+    kill $BACKEND_PID $FRONTEND_PID 2>/dev/null
+    # Kill any remaining child processes
+    pkill -P $$ 2>/dev/null
+    exit 0
+}
+trap cleanup SIGINT SIGTERM EXIT
+
+# Wait for services to start
+sleep 3
+
+# Get local IP for LAN access
+LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+
+# Print persistent status bar
+print_status() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${GREEN}🎙️  Qwen3-TTS Studio is running!${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "   Local:   http://localhost:3000"
+    echo "   LAN:     http://$LOCAL_IP:3000"
+    echo "   API:     http://$LOCAL_IP:8000"
+    echo ""
+    if [ "$GPU_TYPE" == "cuda" ]; then
+        echo -e "   ${GREEN}🎮 NVIDIA GPU acceleration enabled${NC}"
+    elif [ "$GPU_TYPE" == "rocm" ]; then
+        echo -e "   ${GREEN}🎮 AMD ROCm acceleration enabled${NC}"
+    else
+        echo -e "   ${YELLOW}⚠ CPU mode (no GPU acceleration)${NC}"
+    fi
+    echo ""
+    echo -e "   ${YELLOW}Press Ctrl+C to stop${NC}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+}
+
+print_status
 
 # Wait for both processes
 wait
+
