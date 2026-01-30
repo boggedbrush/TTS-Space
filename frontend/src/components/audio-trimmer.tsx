@@ -33,30 +33,134 @@ export function AudioTrimmer({
     const regionsRef = React.useRef<RegionsPlugin | null>(null);
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [duration, setDuration] = React.useState(0);
-    const [currentTime, setCurrentTime] = React.useState(0);
     const [regionStart, setRegionStart] = React.useState(0);
     const [regionEnd, setRegionEnd] = React.useState(0);
+    const [isWaveReady, setIsWaveReady] = React.useState(false);
+    const [loadError, setLoadError] = React.useState<string | null>(null);
+    const [containerReady, setContainerReady] = React.useState(false);
+    const objectUrlRef = React.useRef<string | null>(null);
+    const isLoadingRef = React.useRef(false);
+    const audioFileRef = React.useRef<File | Blob | null>(audioFile);
 
-    // Initialize WaveSurfer
-    React.useEffect(() => {
-        if (!open || !audioFile || !containerRef.current) return;
-
-        // Clean up previous instance if exists (double safety)
-        if (wavesurferRef.current) {
-            wavesurferRef.current.destroy();
-            wavesurferRef.current = null;
+    // Callback ref for container with dimension check
+    const containerCallback = React.useCallback((node: HTMLDivElement | null) => {
+        containerRef.current = node;
+        if (node && node.clientWidth > 0 && node.clientHeight > 0) {
+            console.log("[AudioTrimmer] Container ready:", { width: node.clientWidth, height: node.clientHeight });
+            setContainerReady(true);
+        } else {
+            setContainerReady(false);
+            // Defensive cleanup for StrictMode unmounts or dialog close
+            if (wavesurferRef.current) {
+                console.log("[AudioTrimmer] Container gone, cleaning up WaveSurfer");
+                wavesurferRef.current.destroy();
+                wavesurferRef.current = null;
+            }
+            if (regionsRef.current) {
+                regionsRef.current = null;
+            }
         }
+    }, []);
 
-        const url = URL.createObjectURL(audioFile);
-        console.log("AudioTrimmer: Initializing with URL", url);
+    // Keep audioFileRef in sync with prop (use layout effect to run before WaveSurfer initialization)
+    React.useLayoutEffect(() => {
+        console.log("[AudioTrimmer] audioFileRef sync:", audioFile ? `${audioFile instanceof File ? audioFile.name : 'Blob'} (${audioFile.size} bytes)` : null);
+        audioFileRef.current = audioFile;
+    }, [audioFile]);
 
-        // Slight delay to ensure Dialog animation has finished and container has width
-        const initTimer = setTimeout(() => {
-            if (!containerRef.current) return;
+    const ensureRegionHandles = React.useCallback(
+        (region: { element?: HTMLElement | null }) => {
+            if (!region?.element) return;
+            const regionEl = region.element;
+            regionEl.classList.add("trim-region");
+
+            let startHandle = regionEl.querySelector<HTMLSpanElement>(".trim-handle-start");
+            if (!startHandle) {
+                startHandle = document.createElement("span");
+                startHandle.className = "trim-handle trim-handle-start";
+                startHandle.setAttribute("aria-hidden", "true");
+                regionEl.appendChild(startHandle);
+            }
+
+            let endHandle = regionEl.querySelector<HTMLSpanElement>(".trim-handle-end");
+            if (!endHandle) {
+                endHandle = document.createElement("span");
+                endHandle.className = "trim-handle trim-handle-end";
+                endHandle.setAttribute("aria-hidden", "true");
+                regionEl.appendChild(endHandle);
+            }
+        },
+        []
+    );
+
+    const updateRegionState = React.useCallback(
+        (region: { start: number; end: number }) => {
+            setRegionStart(region.start);
+            setRegionEnd(region.end);
+        },
+        []
+    );
+
+    const loadAudioFile = React.useCallback((file: File | Blob | null) => {
+        if (!file) return;
+        const ws = wavesurferRef.current;
+        if (!ws) {
+            console.warn("AudioTrimmer: loadAudioFile called before WaveSurfer ready");
+            return;
+        }
+        setLoadError(null);
+        if (objectUrlRef.current) {
+            URL.revokeObjectURL(objectUrlRef.current);
+            objectUrlRef.current = null;
+        }
+        const objectUrl = URL.createObjectURL(file);
+        objectUrlRef.current = objectUrl;
+        try {
+            ws.load(objectUrl);
+        } catch (err) {
+            console.error("AudioTrimmer: Load error", err);
+            setLoadError("Waveform failed to load. Try reopening the trimmer.");
+        }
+    }, []);
+
+    // Initialize WaveSurfer (once per open)
+    React.useLayoutEffect(() => {
+        if (!open || !containerReady || !containerRef.current) return;
+
+        // Avoid re-initializing if already active
+        if (wavesurferRef.current) return;
+
+        setIsPlaying(false);
+        setDuration(0);
+        setRegionStart(0);
+        setRegionEnd(0);
+        setIsWaveReady(false);
+        setLoadError(null);
+
+        let isDestroyed = false;
+        let resizeObserver: ResizeObserver | null = null;
+        let hasInitialized = false;
+        let initFrames = 0;
+        const containerEl = containerRef.current;
+        const initWhenReady = () => {
+            if (!containerEl || isDestroyed || hasInitialized) {
+                return;
+            }
+            if (containerEl.clientWidth === 0 || containerEl.clientHeight === 0) {
+                console.log("[AudioTrimmer] Container has zero dimensions:", { width: containerEl.clientWidth, height: containerEl.clientHeight });
+                return;
+            }
+            hasInitialized = true;
+            // Disconnect the polling observer - we're done waiting for layout
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+                resizeObserver = null;
+            }
+            console.log("[AudioTrimmer] Initializing WaveSurfer...");
 
             try {
                 const ws = WaveSurfer.create({
-                    container: containerRef.current,
+                    container: containerEl,
                     waveColor: "hsl(262 83% 58%)",
                     progressColor: "hsl(330 81% 60%)",
                     cursorColor: "hsl(330 81% 60%)",
@@ -65,42 +169,59 @@ export function AudioTrimmer({
                     barRadius: 2,
                     height: 128,
                     normalize: true,
-                    minPxPerSec: 50,
+                    backend: "WebAudio",
                 });
 
-                const wsRegions = RegionsPlugin.create();
-                ws.registerPlugin(wsRegions);
+                const wsRegions = ws.registerPlugin(RegionsPlugin.create());
 
-                ws.load(url);
+                const keepSingleRegion = (activeRegion: { id: string }) => {
+                    const regions = wsRegions.getRegions();
+                    regions.forEach((region) => {
+                        if (region.id !== activeRegion.id) {
+                            region.remove();
+                        }
+                    });
+                };
+
+                wsRegions.on("region-created", (region) => {
+                    keepSingleRegion(region);
+                    updateRegionState(region);
+                    ensureRegionHandles(region);
+                });
+
+                wsRegions.on("region-updated", (region) => {
+                    updateRegionState(region);
+                    ensureRegionHandles(region);
+                });
 
                 ws.on("ready", () => {
-                    console.log("AudioTrimmer: WaveSurfer ready");
+                    isLoadingRef.current = false;
+                    console.log("[AudioTrimmer] WaveSurfer ready event fired, duration:", ws.getDuration());
+                    setLoadError(null);
                     const dur = ws.getDuration();
                     setDuration(dur);
-                    setRegionEnd(dur);
 
                     // Add a default region covering the whole track
-                    wsRegions.addRegion({
+                    wsRegions.clearRegions();
+                    const region = wsRegions.addRegion({
                         start: 0,
                         end: dur,
                         color: "rgba(236, 72, 153, 0.2)", // Pinkish
                         drag: true,
                         resize: true,
                     });
+                    updateRegionState(region);
+                    ensureRegionHandles(region);
                 });
 
-                ws.on("audioprocess", () => {
-                    const curr = ws.getCurrentTime();
-                    setCurrentTime(curr);
-
+                ws.on("timeupdate", (time) => {
+                    const curr = time;
                     // Loop region logic
-                    if (regionsRef.current) {
-                        const regions = regionsRef.current.getRegions();
-                        if (regions.length > 0) {
-                            const region = regions[0];
-                            if (curr >= region.end) {
-                                ws.seekTo(region.start / ws.getDuration());
-                            }
+                    const regions = wsRegions.getRegions();
+                    if (regions.length > 0) {
+                        const region = regions[0];
+                        if (curr >= region.end) {
+                            ws.seekTo(region.start / ws.getDuration());
                         }
                     }
                 });
@@ -109,35 +230,136 @@ export function AudioTrimmer({
                     setIsPlaying(false);
                 });
 
-                ws.on("error", (err) => {
-                    console.error("AudioTrimmer: WaveSurfer error", err);
+                ws.on("loading", (percent: number) => {
+                    console.log("[AudioTrimmer] Loading progress:", percent + "%");
                 });
 
-                wsRegions.on("region-updated", (region) => {
-                    setRegionStart(region.start);
-                    setRegionEnd(region.end);
+                ws.on("decode", (duration: number) => {
+                    console.log("[AudioTrimmer] Audio decoded, duration:", duration);
+                });
+
+                ws.on("error", (err) => {
+                    isLoadingRef.current = false;
+                    console.error("AudioTrimmer: WaveSurfer error", err);
+                    setLoadError("Waveform failed to load. Try reopening the trimmer.");
+                    setIsWaveReady(false);
                 });
 
                 ws.on("interaction", () => {
                     // Optional: handle seek
                 });
 
+                wsRegions.enableDragSelection({
+                    color: "rgba(236, 72, 153, 0.2)",
+                    drag: true,
+                    resize: true,
+                });
+
+
                 wavesurferRef.current = ws;
                 regionsRef.current = wsRegions;
+                setIsWaveReady(true);
+                console.log("[AudioTrimmer] WaveSurfer created, isWaveReady = true");
+
+                // Load audio file immediately if available
+                const fileToLoad = audioFile;
+                console.log("[AudioTrimmer] fileToLoad:", fileToLoad ? `${fileToLoad instanceof File ? fileToLoad.name : 'Blob'} (${fileToLoad.size} bytes)` : null);
+                if (fileToLoad) {
+                    // Inline load logic to avoid dependency issues
+                    if (objectUrlRef.current) {
+                        URL.revokeObjectURL(objectUrlRef.current);
+                        objectUrlRef.current = null;
+                    }
+                    const objectUrl = URL.createObjectURL(fileToLoad);
+                    objectUrlRef.current = objectUrl;
+                    console.log("[AudioTrimmer] Loading audio from URL:", objectUrl);
+                    try {
+                        isLoadingRef.current = true;
+                        ws.load(objectUrl);
+                        console.log("[AudioTrimmer] ws.load() called successfully");
+                    } catch (loadErr) {
+                        isLoadingRef.current = false;
+                        console.error("AudioTrimmer: Load error", loadErr);
+                        setLoadError("Waveform failed to load. Try reopening the trimmer.");
+                    }
+                } else {
+                    console.log("[AudioTrimmer] No file to load!");
+                }
             } catch (err) {
                 console.error("AudioTrimmer: Initialization error", err);
+                setLoadError("Waveform failed to initialize. Try reopening the trimmer.");
             }
-        }, 100);
+        };
+
+        const waitForLayout = () => {
+            if (isDestroyed || hasInitialized) return;
+            initWhenReady();
+            if (!hasInitialized) {
+                initFrames += 1;
+                if (initFrames <= 60) {
+                    requestAnimationFrame(waitForLayout);
+                } else {
+                    setLoadError("Waveform container is not ready. Try reopening the trimmer.");
+                }
+            }
+        };
+
+        if (typeof ResizeObserver !== "undefined" && containerEl) {
+            resizeObserver = new ResizeObserver(() => {
+                initWhenReady();
+            });
+            resizeObserver.observe(containerEl);
+        }
+
+        waitForLayout();
 
         return () => {
-            clearTimeout(initTimer);
+            isDestroyed = true;
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+                resizeObserver = null;
+            }
+            if (regionsRef.current) {
+                try {
+                    regionsRef.current.destroy();
+                } catch (e) {
+                    console.warn("[AudioTrimmer] Plugin destroy error:", e);
+                }
+                regionsRef.current = null;
+            }
             if (wavesurferRef.current) {
                 wavesurferRef.current.destroy();
                 wavesurferRef.current = null;
             }
-            URL.revokeObjectURL(url);
+            if (objectUrlRef.current) {
+                const urlToRevoke = objectUrlRef.current;
+                objectUrlRef.current = null;
+                // Defer revocation if still loading to prevent mid-decode failure
+                if (isLoadingRef.current) {
+                    setTimeout(() => URL.revokeObjectURL(urlToRevoke), 100);
+                } else {
+                    URL.revokeObjectURL(urlToRevoke);
+                }
+            }
+            setIsWaveReady(false);
+            isLoadingRef.current = false;
         };
-    }, [open, audioFile]);
+    }, [open, containerReady, audioFile, updateRegionState, loadAudioFile, ensureRegionHandles]);
+
+    // ResizeObserver to detect late layout (container gets dimensions after animation)
+    React.useEffect(() => {
+        if (!open || !containerRef.current) return;
+
+        const observer = new ResizeObserver((entries) => {
+            const { width, height } = entries[0].contentRect;
+            if (width > 0 && height > 0 && !containerReady) {
+                console.log("[AudioTrimmer] ResizeObserver: Container now has dimensions", { width, height });
+                setContainerReady(true);
+            }
+        });
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
+    }, [open, containerReady]);
 
     const togglePlay = () => {
         if (wavesurferRef.current) {
@@ -165,15 +387,33 @@ export function AudioTrimmer({
         if (!audioFile || !wavesurferRef.current) return;
 
         // We need to decode the audio data to buffer
+        let audioContext: AudioContext | null = null;
         try {
+            const regions = regionsRef.current?.getRegions() ?? [];
+            const activeRegion = regions[0];
             const arrayBuffer = await audioFile.arrayBuffer();
-            const audioContext = new AudioContext(); // New context for processing
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            audioContext = new AudioContext(); // New context for processing
+            const waveSurferWithDecode = wavesurferRef.current as unknown as {
+                getDecodedData?: () => AudioBuffer | null;
+            };
+            const decodedFromWaveSurfer =
+                typeof waveSurferWithDecode.getDecodedData === "function"
+                    ? waveSurferWithDecode.getDecodedData()
+                    : null;
+            const audioBuffer = decodedFromWaveSurfer ??
+                (await audioContext.decodeAudioData(arrayBuffer));
 
             // Calculate start/end frames
             // Safeguard bounds
-            const finalStart = Math.max(0, regionStart);
-            const finalEnd = Math.min(audioBuffer.duration, regionEnd);
+            const rawStart = activeRegion?.start ?? regionStart;
+            const rawEnd = activeRegion?.end ?? regionEnd;
+            let finalStart = Math.max(0, rawStart);
+            let finalEnd = Math.min(audioBuffer.duration, rawEnd);
+
+            if (finalEnd <= finalStart) {
+                finalStart = 0;
+                finalEnd = audioBuffer.duration;
+            }
 
             if (finalEnd <= finalStart) return;
 
@@ -216,6 +456,10 @@ export function AudioTrimmer({
             onOpenChange(false); // Close dialog
         } catch (error) {
             console.error("Error trimming audio:", error);
+        } finally {
+            if (audioContext) {
+                void audioContext.close();
+            }
         }
     };
 
@@ -225,15 +469,20 @@ export function AudioTrimmer({
                 <DialogHeader>
                     <DialogTitle>Trim Audio</DialogTitle>
                     <DialogDescription>
-                        Drag the handles to select the part of the audio you want to keep.
+                        Drag on the waveform or the handles to select the part of the audio you want to keep.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="py-4">
                     <div
-                        ref={containerRef}
-                        className="w-full mb-4 rounded-lg overflow-hidden border bg-muted/30"
+                        ref={containerCallback}
+                        className="w-full h-32 mb-4 rounded-lg overflow-hidden border bg-muted/30"
                     />
+                    {loadError && (
+                        <div className="text-sm text-destructive mb-2">
+                            {loadError}
+                        </div>
+                    )}
 
                     <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
                         <div>
