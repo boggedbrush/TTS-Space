@@ -60,25 +60,25 @@ These scripts auto-detect your GPU and set everything up for you:
 
 **Linux:**
 ```bash
-git clone https://github.com/yourusername/TTS-Space.git && cd TTS-Space
+git clone https://github.com/boggedbrush/TTS-Space.git && cd TTS-Space
 ./scripts/run-linux.sh
 ```
 
 **macOS:**
 ```bash
-git clone https://github.com/yourusername/TTS-Space.git && cd TTS-Space
+git clone https://github.com/boggedbrush/TTS-Space.git && cd TTS-Space
 ./scripts/run-macos.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-git clone https://github.com/yourusername/TTS-Space.git; cd TTS-Space
+git clone https://github.com/boggedbrush/TTS-Space.git; cd TTS-Space
 .\scripts\run-windows.ps1
 ```
 
 **Windows (CMD):**
 ```cmd
-git clone https://github.com/yourusername/TTS-Space.git && cd TTS-Space
+git clone https://github.com/boggedbrush/TTS-Space.git && cd TTS-Space
 scripts\run-windows.bat
 ```
 
@@ -87,7 +87,7 @@ scripts\run-windows.bat
 #### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/TTS-Space.git
+git clone https://github.com/boggedbrush/TTS-Space.git
 cd TTS-Space
 ```
 
