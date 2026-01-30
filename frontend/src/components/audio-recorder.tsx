@@ -1,18 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { Mic, Square, Play, RotateCcw, Check, Trash2 } from "lucide-react";
+import { Mic, Square, Play, RotateCcw, Check, Trash2, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface AudioRecorderProps {
     onRecordingComplete: (file: File) => void;
+    onTrim?: (file: File) => void;
     onCancel?: () => void;
     className?: string;
 }
 
 export function AudioRecorder({
     onRecordingComplete,
+    onTrim,
     onCancel,
     className,
 }: AudioRecorderProps) {
@@ -103,6 +105,15 @@ export function AudioRecorder({
         }
     };
 
+    const handleTrim = () => {
+        if (audioBlob && onTrim) {
+            const file = new File([audioBlob], "recorded-audio.wav", {
+                type: "audio/wav",
+            });
+            onTrim(file);
+        }
+    }
+
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -134,6 +145,12 @@ export function AudioRecorder({
                         Discard
                     </Button>
                     <div className="flex-1" />
+                    {onTrim && (
+                        <Button variant="secondary" size="sm" onClick={handleTrim} className="mr-2">
+                            <Scissors className="h-4 w-4 mr-2" />
+                            Trim
+                        </Button>
+                    )}
                     <Button size="sm" onClick={handleConfirm} className="gap-2">
                         <Check className="h-4 w-4" />
                         Use Recording

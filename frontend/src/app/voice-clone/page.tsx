@@ -261,7 +261,15 @@ export default function VoiceClonePage() {
                                     </p>
                                 </div>
                             ) : (
-                                <AudioRecorder onRecordingComplete={handleFileSelect} />
+                                <AudioRecorder
+                                    onRecordingComplete={handleFileSelect}
+                                    onTrim={(file) => {
+                                        setRefAudio(file);
+                                        const url = URL.createObjectURL(file);
+                                        setRefAudioUrl(url);
+                                        setIsTrimming(true);
+                                    }}
+                                />
                             )
                         ) : (
                             <div className="rounded-xl border border-border/50 bg-card/50 p-4">
