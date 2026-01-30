@@ -23,7 +23,7 @@ const getApiBase = () => {
 
     // Use explicit API URL if configured (for tunnels/remote)
     if (process.env.NEXT_PUBLIC_API_URL) {
-        return process.env.NEXT_PUBLIC_API_URL;
+        return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
     }
 
     // Use relative path if proxying through same origin or in Docker

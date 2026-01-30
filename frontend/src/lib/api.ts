@@ -8,7 +8,7 @@ const getApiBase = () => {
     // Use explicit API URL if configured (for tunnels/remote)
     // This enables using Cloudflare Tunnels where backend is on a different URL
     if (process.env.NEXT_PUBLIC_API_URL) {
-        return process.env.NEXT_PUBLIC_API_URL;
+        return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
     }
 
     // Use relative path if proxying through same origin or in Docker

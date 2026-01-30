@@ -57,9 +57,12 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend - permissive for development
+# CORS middleware for frontend - permissive for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    # allow_origins=["*"] cannot be used with allow_credentials=True
+    # Use allow_origin_regex to match any http/https origin
+    allow_origin_regex="https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
