@@ -103,6 +103,51 @@
   .waveform-container {
     @apply relative h-20 w-full rounded-lg overflow-hidden bg-muted/50;
   }
+
+  /* Trim region handles */
+  .trim-region {
+    overflow: visible;
+  }
+
+  .trim-region .trim-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: hsl(var(--accent));
+    background: hsl(var(--background) / 0.6);
+    border: 1px solid hsl(var(--accent) / 0.6);
+    box-shadow: 0 4px 10px hsl(var(--accent) / 0.15);
+    cursor: ew-resize;
+    user-select: none;
+  }
+
+  .trim-region .trim-handle-start {
+    left: 0;
+    transform: translateX(-50%);
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+  }
+
+  .trim-region .trim-handle-start::before {
+    content: ">";
+  }
+
+  .trim-region .trim-handle-end {
+    right: 0;
+    transform: translateX(50%);
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+  }
+
+  .trim-region .trim-handle-end::before {
+    content: "<";
+  }
 }
 
 @layer utilities {
