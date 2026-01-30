@@ -17,10 +17,23 @@ interface UseStatusOptions {
 }
 
 // Use the current hostname so clients on LAN can access the backend
+// Use the current hostname so clients on LAN can access the backend
 const getApiBase = () => {
     if (typeof window === "undefined") return "";
-    const hostname = window.location.hostname;
-    return `http://${hostname}:8000/api`;
+
+    // Use explicit API URL if configured (for tunnels/remote)
+    if (process.env.NEXT_PUBLIC_API_URL) {
+        return process.env.NEXT_PUBLIC_API_URL;
+    }
+
+    // Use relative path if proxying through same origin or in Docker
+    if (window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1") {
+        return "/api";
+    }
+
+    // Development mode fallback
+    return `http://${window.location.hostname}:8000/api`;
 };
 
 export function useStatus(options: UseStatusOptions = {}) {

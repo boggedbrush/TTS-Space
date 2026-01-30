@@ -198,6 +198,23 @@ TTS-Space/
 | `/api/voice-clone` | POST | Clone from audio |
 | `/api/custom-voice` | POST | Use pre-trained speaker |
 
+| `/api/custom-voice` | POST | Use pre-trained speaker |
+
+## 🌐 Remote Access / Tunnels
+
+To access the application remotely using Cloudflare Tunnels, ngrok, or other tunneling services where the frontend and backend may be on different URLs:
+
+1. Expose your backend (port 8000) via a tunnel
+2. Set the `NEXT_PUBLIC_API_URL` environment variable when building/running the frontend
+
+```bash
+# Example with Cloudflare Tunnel
+export NEXT_PUBLIC_API_URL="https://your-backend-tunnel.trycloudflare.com/api"
+npm run dev
+```
+
+This ensures the frontend can communicate with the backend regardless of the domain or port configuration.
+
 ### Example: Voice Design
 
 ```bash
