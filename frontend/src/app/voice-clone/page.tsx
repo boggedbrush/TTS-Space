@@ -15,6 +15,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { AudioPlayer } from "@/components/audio-player";
+import { AudioRecorder } from "@/components/audio-recorder";
 import { apiClient } from "@/lib/api";
 import { LANGUAGES, MODEL_SIZES, voiceCloneSchema } from "@/lib/validators";
 import { toast } from "@/hooks/use-toast";
@@ -32,6 +33,7 @@ export default function VoiceClonePage() {
     const [audioBlob, setAudioBlob] = React.useState<Blob | null>(null);
     const [refAudioUrl, setRefAudioUrl] = React.useState<string | null>(null);
     const [isDragging, setIsDragging] = React.useState(false);
+    const [inputMode, setInputMode] = React.useState<"file" | "mic">("file");
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -142,6 +144,14 @@ export default function VoiceClonePage() {
         }
     };
 
+    // Clean up URLs on unmount
+    React.useEffect(() => {
+        return () => {
+            if (refAudioUrl) URL.revokeObjectURL(refAudioUrl);
+            if (audioUrl) URL.revokeObjectURL(audioUrl);
+        };
+    }, []);
+
     return (
         <div className="max-w-4xl mx-auto">
             <motion.div
@@ -165,38 +175,69 @@ export default function VoiceClonePage() {
             <div className="grid lg:grid-cols-2 gap-8">
                 {/* Left column - Reference & Settings */}
                 <div className="space-y-6">
-                    {/* Reference audio upload */}
+                    {/* Reference audio input */}
                     <div className="space-y-2">
-                        <Label>Reference Audio</Label>
-                        {!refAudio ? (
-                            <div
-                                className={cn(
-                                    "relative rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer",
-                                    isDragging
-                                        ? "border-primary bg-primary/5"
-                                        : "border-border/50 hover:border-primary/50"
-                                )}
-                                onDrop={handleDrop}
-                                onDragOver={handleDragOver}
-                                onDragLeave={handleDragLeave}
-                                onClick={() => fileInputRef.current?.click()}
-                            >
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="audio/*"
-                                    className="hidden"
-                                    onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) handleFileSelect(file);
-                                    }}
-                                />
-                                <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
-                                <p className="font-medium">Drop audio file here</p>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    or click to browse (WAV, MP3, etc.)
-                                </p>
+                        <div className="flex items-center justify-between mb-2">
+                            <Label>Reference Audio</Label>
+                            <div className="flex p-1 bg-muted rounded-lg">
+                                <button
+                                    onClick={() => setInputMode("file")}
+                                    className={cn(
+                                        "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                                        inputMode === "file"
+                                            ? "bg-background shadow-sm text-foreground"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Upload File
+                                </button>
+                                <button
+                                    onClick={() => setInputMode("mic")}
+                                    className={cn(
+                                        "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                                        inputMode === "mic"
+                                            ? "bg-background shadow-sm text-foreground"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Record Mic
+                                </button>
                             </div>
+                        </div>
+
+                        {!refAudio ? (
+                            inputMode === "file" ? (
+                                <div
+                                    className={cn(
+                                        "relative rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer",
+                                        isDragging
+                                            ? "border-primary bg-primary/5"
+                                            : "border-border/50 hover:border-primary/50"
+                                    )}
+                                    onDrop={handleDrop}
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="audio/*"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) handleFileSelect(file);
+                                        }}
+                                    />
+                                    <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
+                                    <p className="font-medium">Drop audio file here</p>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                        or click to browse (WAV, MP3, etc.)
+                                    </p>
+                                </div>
+                            ) : (
+                                <AudioRecorder onRecordingComplete={handleFileSelect} />
+                            )
                         ) : (
                             <div className="rounded-xl border border-border/50 bg-card/50 p-4">
                                 <div className="flex items-center gap-3 mb-3">
