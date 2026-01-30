@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Upload, Mic, Info, X, FileAudio, Wand2 } from "lucide-react";
+import { Upload, Mic, Info, X, FileAudio, Wand2, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { AudioPlayer } from "@/components/audio-player";
 import { AudioRecorder } from "@/components/audio-recorder";
+import { AudioTrimmer } from "@/components/audio-trimmer";
 import { apiClient } from "@/lib/api";
 import { LANGUAGES, MODEL_SIZES, voiceCloneSchema } from "@/lib/validators";
 import { toast } from "@/hooks/use-toast";
@@ -36,6 +37,8 @@ export default function VoiceClonePage() {
     const [inputMode, setInputMode] = React.useState<"file" | "mic">("file");
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+    const [isTrimming, setIsTrimming] = React.useState(false);
 
     const handleFileSelect = (file: File) => {
         if (!file.type.startsWith("audio/")) {
@@ -144,6 +147,21 @@ export default function VoiceClonePage() {
         }
     };
 
+    const handleTrimComplete = (trimmedFile: File) => {
+        // Revoke old URL
+        if (refAudioUrl) URL.revokeObjectURL(refAudioUrl);
+
+        setRefAudio(trimmedFile);
+        const url = URL.createObjectURL(trimmedFile);
+        setRefAudioUrl(url);
+
+        toast({
+            title: "Audio Trimmed",
+            description: "Reference audio updated successfully",
+            variant: "success",
+        });
+    };
+
     // Clean up URLs on unmount
     React.useEffect(() => {
         return () => {
@@ -154,6 +172,13 @@ export default function VoiceClonePage() {
 
     return (
         <div className="max-w-4xl mx-auto">
+            <AudioTrimmer
+                open={isTrimming}
+                onOpenChange={setIsTrimming}
+                audioFile={refAudio}
+                onTrim={handleTrimComplete}
+            />
+
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -248,14 +273,24 @@ export default function VoiceClonePage() {
                                             {formatBytes(refAudio.size)}
                                         </p>
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={removeRefAudio}
-                                        aria-label="Remove file"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </Button>
+                                    <div className="flex gap-1">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => setIsTrimming(true)}
+                                            title="Trim Audio"
+                                        >
+                                            <Scissors className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={removeRefAudio}
+                                            aria-label="Remove file"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </div>
                                 {refAudioUrl && (
                                     <audio
@@ -267,7 +302,6 @@ export default function VoiceClonePage() {
                             </div>
                         )}
                     </div>
-
                     {/* Reference text */}
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
