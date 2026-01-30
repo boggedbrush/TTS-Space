@@ -70,6 +70,8 @@ class TTSManager:
 
     def _get_model(self, model_key: str):
         """Get or load a model by key."""
+        from app.services.status_manager import status_manager
+        
         if model_key not in MODEL_IDS:
             raise ValueError(f"Unknown model key: {model_key}")
 
@@ -77,6 +79,7 @@ class TTSManager:
             if model_key not in self._models:
                 model_id = MODEL_IDS[model_key]
                 logger.info(f"Loading model: {model_id}")
+                status_manager.info(f"Loading model: {model_id}")
 
                 try:
                     from qwen_tts import Qwen3TTSModel
@@ -98,9 +101,11 @@ class TTSManager:
                     )
                     self._models[model_key] = model
                     logger.info(f"Model loaded: {model_id}")
+                    status_manager.success(f"Model loaded: {model_id}")
 
                 except Exception as e:
                     logger.error(f"Failed to load model {model_id}: {e}")
+                    status_manager.error(f"Failed to load model: {e}")
                     raise
 
             return self._models[model_key]

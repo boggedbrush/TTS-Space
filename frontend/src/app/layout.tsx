@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { Header } from "@/components/header";
+import { StatusBarWrapper } from "@/components/status-bar-wrapper";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -61,6 +62,7 @@ export default function RootLayout({
                         <Header />
                         <main className="container mx-auto px-4 py-8">{children}</main>
                     </div>
+                    <StatusBarWrapper />
                     <Toaster />
                 </ThemeProvider>
             </body>
