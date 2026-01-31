@@ -41,6 +41,20 @@ export default function VoiceClonePage() {
     const [isTrimming, setIsTrimming] = React.useState(false);
     const [isTranscribing, setIsTranscribing] = React.useState(false);
 
+    // Helper to get audio duration
+    const getAudioDuration = (file: File): Promise<number> => {
+        return new Promise((resolve) => {
+            const audio = new Audio(URL.createObjectURL(file));
+            audio.onloadedmetadata = () => {
+                URL.revokeObjectURL(audio.src);
+                resolve(audio.duration);
+            };
+            audio.onerror = () => {
+                resolve(0); // Fail safe
+            };
+        });
+    };
+
     const handleFileSelect = (file: File) => {
         if (!file.type.startsWith("audio/")) {
             toast({
@@ -52,6 +66,7 @@ export default function VoiceClonePage() {
         }
 
         setRefAudio(file);
+        setRefText("");
         const url = URL.createObjectURL(file);
         setRefAudioUrl(url);
     };
@@ -153,6 +168,7 @@ export default function VoiceClonePage() {
         if (refAudioUrl) URL.revokeObjectURL(refAudioUrl);
 
         setRefAudio(trimmedFile);
+        setRefText("");
         const url = URL.createObjectURL(trimmedFile);
         setRefAudioUrl(url);
 
@@ -163,7 +179,7 @@ export default function VoiceClonePage() {
         });
     };
 
-    const handleAutoTranscribe = async () => {
+    const handleAutoTranscribe = React.useCallback(async () => {
         if (!refAudio) {
             toast({
                 title: "No Audio",
@@ -191,7 +207,44 @@ export default function VoiceClonePage() {
         } finally {
             setIsTranscribing(false);
         }
-    };
+    }, [refAudio, language]);
+
+    // Auto-transcribe check when audio changes
+    React.useEffect(() => {
+        const checkAndTranscribe = async () => {
+            if (refAudio && !xVectorOnly) {
+                // Safety check for empty files
+                if (refAudio.size === 0) return;
+
+                // Check duration
+                const duration = await getAudioDuration(refAudio);
+
+                // If duration is 0, it likely failed to load metadata or is invalid
+                if (duration === 0) {
+                    console.log("Audio duration check failed or 0s, skipping auto-transcribe");
+                    return;
+                }
+
+                if (duration > 30) {
+                    toast({
+                        title: "Audio Too Long",
+                        description: `Reference audio is ${duration.toFixed(1)}s. Please trim to under 30s.`,
+                        // Don't error if it's just a restored state, maybe just warn? 
+                        // Destructive is fine as it requires user action.
+                        variant: "destructive",
+                    });
+                } else {
+                    handleAutoTranscribe();
+                }
+            }
+        };
+
+        checkAndTranscribe();
+
+        // We only want to auto-transcribe when the audio file changes,
+        // not when language changes (to preserve manual edits if language is toggled)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [refAudio, xVectorOnly]);
 
     // Clean up URLs on unmount
     React.useEffect(() => {
@@ -208,6 +261,7 @@ export default function VoiceClonePage() {
                 onOpenChange={setIsTrimming}
                 audioFile={refAudio}
                 onTrim={handleTrimComplete}
+                maxDuration={30}
             />
 
             <motion.div
@@ -501,7 +555,7 @@ export default function VoiceClonePage() {
                         <div className="text-sm text-muted-foreground">
                             <p className="font-medium text-foreground mb-1">Tips for best results</p>
                             <ul className="list-disc list-inside space-y-1">
-                                <li>Use 5-15 seconds of clear reference audio</li>
+                                <li>Use 5-15 seconds of clear reference audio (max 30s)</li>
                                 <li>Ensure the transcript exactly matches the audio</li>
                                 <li>1.7B model provides higher fidelity cloning</li>
                             </ul>

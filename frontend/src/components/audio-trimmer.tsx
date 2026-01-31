@@ -20,6 +20,7 @@ interface AudioTrimmerProps {
     onOpenChange: (open: boolean) => void;
     audioFile: File | Blob | null;
     onTrim: (trimmedFile: File) => void;
+    maxDuration?: number;
 }
 
 export function AudioTrimmer({
@@ -27,6 +28,7 @@ export function AudioTrimmer({
     onOpenChange,
     audioFile,
     onTrim,
+    maxDuration,
 }: AudioTrimmerProps) {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const wavesurferRef = React.useRef<WaveSurfer | null>(null);
@@ -190,6 +192,17 @@ export function AudioTrimmer({
                 });
 
                 wsRegions.on("region-updated", (region) => {
+                    // Enforce max duration if set
+                    if (maxDuration && (region.end - region.start) > maxDuration) {
+                        // Let's try simpler: directly set end
+                        const newEnd = region.start + maxDuration;
+                        if (newEnd <= ws.getDuration()) {
+                            region.setOptions({ end: newEnd });
+                        } else {
+                            // partial shift
+                            region.setOptions({ start: ws.getDuration() - maxDuration, end: ws.getDuration() });
+                        }
+                    }
                     updateRegionState(region);
                     ensureRegionHandles(region);
                 });
@@ -201,11 +214,13 @@ export function AudioTrimmer({
                     const dur = ws.getDuration();
                     setDuration(dur);
 
-                    // Add a default region covering the whole track
+                    // Add a default region covering the whole track (or max duration)
                     wsRegions.clearRegions();
+                    const initialEnd = maxDuration ? Math.min(dur, maxDuration) : dur;
+
                     const region = wsRegions.addRegion({
                         start: 0,
-                        end: dur,
+                        end: initialEnd,
                         color: "rgba(236, 72, 153, 0.2)", // Pinkish
                         drag: true,
                         resize: true,
@@ -344,7 +359,7 @@ export function AudioTrimmer({
             setIsWaveReady(false);
             isLoadingRef.current = false;
         };
-    }, [open, containerReady, audioFile, updateRegionState, loadAudioFile, ensureRegionHandles]);
+    }, [open, containerReady, audioFile, updateRegionState, loadAudioFile, ensureRegionHandles, maxDuration]);
 
     // ResizeObserver to detect late layout (container gets dimensions after animation)
     React.useEffect(() => {
