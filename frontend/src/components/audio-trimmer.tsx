@@ -23,6 +23,15 @@ interface AudioTrimmerProps {
     maxDuration?: number;
 }
 
+const SKELETON_BAR_HEIGHTS = Array.from({ length: 160 }, (_, index) => {
+    const randA = Math.abs(Math.sin(index * 12.9898) * 43758.5453) % 1;
+    const randB = Math.abs(Math.sin(index * 4.1414 + 1.7) * 13123.123) % 1;
+    const shaped = Math.pow(randA, 0.6) * 0.7 + Math.pow(randB, 1.4) * 0.3;
+    const peakBoost = index % 11 === 0 ? 0.2 : 0;
+    const height = 0.25 + shaped * 0.65 + peakBoost;
+    return Math.min(0.98, height);
+});
+
 export function AudioTrimmer({
     open,
     onOpenChange,
@@ -111,6 +120,8 @@ export function AudioTrimmer({
             return;
         }
         setLoadError(null);
+        setIsWaveReady(false);
+        isLoadingRef.current = true;
         if (objectUrlRef.current) {
             URL.revokeObjectURL(objectUrlRef.current);
             objectUrlRef.current = null;
@@ -120,6 +131,7 @@ export function AudioTrimmer({
         try {
             ws.load(objectUrl);
         } catch (err) {
+            isLoadingRef.current = false;
             console.error("AudioTrimmer: Load error", err);
             setLoadError("Waveform failed to load. Try reopening the trimmer.");
         }
@@ -216,6 +228,7 @@ export function AudioTrimmer({
                         return;
                     }
                     setLoadError(null);
+                    setIsWaveReady(true);
                     const dur = ws.getDuration();
                     if (!Number.isFinite(dur) || dur <= 0) {
                         return;
@@ -285,8 +298,7 @@ export function AudioTrimmer({
 
                 wavesurferRef.current = ws;
                 regionsRef.current = wsRegions;
-                setIsWaveReady(true);
-                console.log("[AudioTrimmer] WaveSurfer created, isWaveReady = true");
+                console.log("[AudioTrimmer] WaveSurfer created, awaiting waveform...");
 
                 // Load audio file immediately if available
                 const fileToLoad = audioFile;
@@ -302,6 +314,7 @@ export function AudioTrimmer({
                     console.log("[AudioTrimmer] Loading audio from URL:", objectUrl);
                     try {
                         isLoadingRef.current = true;
+                        setIsWaveReady(false);
                         ws.load(objectUrl);
                         console.log("[AudioTrimmer] ws.load() called successfully");
                     } catch (loadErr) {
@@ -484,6 +497,8 @@ export function AudioTrimmer({
         }
     };
 
+    const showSkeleton = !isWaveReady && !loadError;
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-xl">
@@ -496,9 +511,40 @@ export function AudioTrimmer({
 
                 <div className="py-4">
                     <div
-                        ref={containerCallback}
-                        className="w-full h-32 mb-4 rounded-lg overflow-hidden border bg-muted/30"
-                    />
+                        className="relative w-full h-32 mb-4 rounded-lg overflow-hidden border bg-muted/30"
+                        aria-busy={!isWaveReady}
+                    >
+                        <div
+                            ref={containerCallback}
+                            className={cn(
+                                "absolute inset-0 transition-opacity duration-500",
+                                isWaveReady ? "opacity-100" : "opacity-0"
+                            )}
+                        />
+                        <div
+                            className={cn(
+                                "absolute inset-0 z-10 transition-opacity duration-500 pointer-events-none",
+                                showSkeleton ? "opacity-100" : "opacity-0"
+                            )}
+                            aria-hidden="true"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
+                            <div className="absolute inset-0 z-20 -translate-x-full bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-60 animate-shimmer" />
+                            <div className="absolute inset-x-0 top-1/2 h-px bg-primary/20" />
+                            <div className="relative z-10 grid h-full grid-flow-col auto-cols-[minmax(2px,1fr)] items-center gap-[1px] px-0 py-1">
+                                {SKELETON_BAR_HEIGHTS.map((height, index) => (
+                                    <span
+                                        key={index}
+                                        className="w-full rounded-[2px] bg-primary/60 animate-pulse"
+                                        style={{
+                                            height: `${Math.round(height * 100)}%`,
+                                            animationDelay: `${index * 20}ms`,
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                     {loadError && (
                         <div className="text-sm text-destructive mb-2">
                             {loadError}
