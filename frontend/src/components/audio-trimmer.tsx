@@ -5,7 +5,7 @@ import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
 import { Play, Pause, Scissors, RotateCcw, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn, formatDuration, audioBufferToWav } from "@/lib/utils";
+import { cn, formatDuration, audioBufferToWavAsync } from "@/lib/utils";
 import {
     Dialog,
     DialogContent,
@@ -48,7 +48,9 @@ export function AudioTrimmer({
     const [regionEnd, setRegionEnd] = React.useState(0);
     const [isWaveReady, setIsWaveReady] = React.useState(false);
     const [loadError, setLoadError] = React.useState<string | null>(null);
+    const [trimError, setTrimError] = React.useState<string | null>(null);
     const [containerReady, setContainerReady] = React.useState(false);
+    const [isTrimming, setIsTrimming] = React.useState(false);
     const objectUrlRef = React.useRef<string | null>(null);
     const isLoadingRef = React.useRef(false);
     const audioFileRef = React.useRef<File | Blob | null>(audioFile);
@@ -423,12 +425,33 @@ export function AudioTrimmer({
         }
     };
 
+    const yieldToMain = React.useCallback(
+        () =>
+            new Promise<void>((resolve) => {
+                if (typeof requestAnimationFrame === "function") {
+                    requestAnimationFrame(() => resolve());
+                } else {
+                    setTimeout(resolve, 0);
+                }
+            }),
+        []
+    );
+
     const handleTrim = async () => {
-        if (!audioFile || !wavesurferRef.current) return;
+        if (!audioFile || !wavesurferRef.current || isTrimming) return;
 
         // We need to decode the audio data to buffer
         let audioContext: AudioContext | null = null;
         try {
+            setTrimError(null);
+            setIsTrimming(true);
+            await yieldToMain();
+
+            if (wavesurferRef.current?.isPlaying()) {
+                wavesurferRef.current.pause();
+                setIsPlaying(false);
+            }
+
             const regions = regionsRef.current?.getRegions() ?? [];
             const activeRegion = regions[0];
             const arrayBuffer = await audioFile.arrayBuffer();
@@ -447,12 +470,20 @@ export function AudioTrimmer({
                 finalEnd = audioBuffer.duration;
             }
 
-            if (finalEnd <= finalStart) return;
+            if (finalEnd <= finalStart) {
+                setTrimError("Trim region is invalid. Please select a longer segment.");
+                return;
+            }
 
             const sampleRate = audioBuffer.sampleRate;
             const startFrame = Math.floor(finalStart * sampleRate);
             const endFrame = Math.floor(finalEnd * sampleRate);
             const frameCount = endFrame - startFrame;
+
+            if (frameCount <= 0) {
+                setTrimError("Trim region is invalid. Please select a longer segment.");
+                return;
+            }
 
             const newBuffer = audioContext.createBuffer(
                 audioBuffer.numberOfChannels,
@@ -460,18 +491,39 @@ export function AudioTrimmer({
                 sampleRate
             );
 
+            const now =
+                typeof performance !== "undefined" &&
+                typeof performance.now === "function"
+                    ? () => performance.now()
+                    : () => Date.now();
+            let lastYield = now();
+            const yieldEveryMs = 16;
+            const maybeYield = async () => {
+                const current = now();
+                if (current - lastYield >= yieldEveryMs) {
+                    lastYield = current;
+                    await yieldToMain();
+                }
+            };
+
+            const chunkSize = 16384;
             for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
                 const channelData = audioBuffer.getChannelData(i);
                 const newChannelData = newBuffer.getChannelData(i);
-                // Copy slice
-                // Note: Copying might be expensive for large files, but for short clips it's fine
-                // Also native subarray is faster but AudioBuffer returns Float32Array
-                for (let j = 0; j < frameCount; j++) {
-                    newChannelData[j] = channelData[startFrame + j];
+                for (let offset = 0; offset < frameCount; offset += chunkSize) {
+                    const end = Math.min(frameCount, offset + chunkSize);
+                    newChannelData.set(
+                        channelData.subarray(startFrame + offset, startFrame + end),
+                        offset
+                    );
+                    await maybeYield();
                 }
             }
 
-            const outputBlob = audioBufferToWav(newBuffer, { float32: true });
+            const outputBlob = await audioBufferToWavAsync(newBuffer, {
+                float32: true,
+                yieldEveryMs: 16,
+            });
             const outputMime = "audio/wav";
 
             // Preserve original filename if possible, or append -trimmed
@@ -490,10 +542,12 @@ export function AudioTrimmer({
             onOpenChange(false); // Close dialog
         } catch (error) {
             console.error("Error trimming audio:", error);
+            setTrimError("Failed to trim audio. Try a shorter selection.");
         } finally {
             if (audioContext) {
                 void audioContext.close();
             }
+            setIsTrimming(false);
         }
     };
 
@@ -550,6 +604,11 @@ export function AudioTrimmer({
                             {loadError}
                         </div>
                     )}
+                    {trimError && (
+                        <div className="text-sm text-destructive mb-2">
+                            {trimError}
+                        </div>
+                    )}
 
                     <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
                         <div>
@@ -600,7 +659,11 @@ export function AudioTrimmer({
                         <Button variant="ghost" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleTrim}>
+                        <Button
+                            onClick={handleTrim}
+                            loading={isTrimming}
+                            disabled={!isWaveReady || !!loadError || isTrimming}
+                        >
                             <Scissors className="h-4 w-4 mr-2" />
                             Trim
                         </Button>
