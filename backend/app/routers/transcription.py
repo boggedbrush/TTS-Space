@@ -1,15 +1,17 @@
 """Transcription API router."""
 
 import logging
+import os
 import tempfile
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import soundfile as sf
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 from app.services.transcription_manager import transcription_manager
+from app.utils.audio import load_audio_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,8 @@ async def transcribe_audio(
         audio_data = await audio.read()
         
         # Save to temp file and read with soundfile
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        suffix = Path(audio.filename or "").suffix or ".tmp"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(audio_data)
             tmp_path = tmp.name
         
@@ -51,8 +54,8 @@ async def transcribe_audio(
             import torchaudio
             import torch
 
-            # Load audio with soundfile (robust)
-            audio_array, sample_rate = sf.read(tmp_path)
+            # Load audio with soundfile; fallback to ffmpeg for formats like m4a.
+            audio_array, sample_rate = load_audio_with_fallback(tmp_path)
             
             # Convert to torch tensor for resampling
             tensor = torch.from_numpy(audio_array).float()
@@ -115,8 +118,10 @@ async def transcribe_audio(
             return TranscriptionResponse(text=text)
             
         finally:
-            import os
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
             
     except Exception as e:
         logger.exception("Transcription failed")

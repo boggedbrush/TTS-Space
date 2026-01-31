@@ -3,6 +3,7 @@
 import io
 import logging
 import tempfile
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -11,6 +12,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
 
 from app.services.tts_manager import tts_manager
+from app.utils.audio import load_audio_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -56,16 +58,43 @@ async def generate_voice_clone(
         audio_data = await ref_audio.read()
         
         # Save to temp file and read with soundfile
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        suffix = Path(ref_audio.filename or "").suffix or ".tmp"
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(audio_data)
             tmp_path = tmp.name
         
         try:
-            ref_audio_array, ref_sr = sf.read(tmp_path)
+            ref_audio_array, ref_sr = load_audio_with_fallback(tmp_path)
             
             # Convert to mono if stereo
             if len(ref_audio_array.shape) > 1:
                 ref_audio_array = np.mean(ref_audio_array, axis=1)
+
+            # Ensure finite, normalized float32 audio in [-1, 1]
+            ref_audio_array = ref_audio_array.astype(np.float32, copy=False)
+            if ref_audio_array.size == 0:
+                raise ValueError("Empty reference audio buffer")
+            if not np.isfinite(ref_audio_array).all():
+                ref_audio_array = np.nan_to_num(ref_audio_array)
+
+            # Resample to 24kHz to match Qwen3 TTS expectations and avoid internal resampling.
+            target_sr = 24000
+            if ref_sr != target_sr:
+                import torch
+                import torchaudio
+
+                tensor = torch.from_numpy(ref_audio_array).float().unsqueeze(0)
+                resampler = torchaudio.transforms.Resample(orig_freq=ref_sr, new_freq=target_sr)
+                tensor = resampler(tensor)
+                ref_audio_array = tensor.squeeze(0).numpy().astype(np.float32, copy=False)
+                ref_sr = target_sr
+
+            peak = float(np.max(np.abs(ref_audio_array)))
+            if peak > 1.0:
+                ref_audio_array = ref_audio_array / peak
+
+            # Clip after any resampling to keep waveform within expected range.
+            ref_audio_array = np.clip(ref_audio_array, -1.0, 1.0)
             
             # Generate cloned speech
             audio, sr = tts_manager.generate_voice_clone(
