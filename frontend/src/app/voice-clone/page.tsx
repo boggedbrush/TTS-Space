@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Upload, Mic, Info, X, FileAudio, Wand2, Scissors } from "lucide-react";
+import { Upload, Mic, Info, X, FileAudio, Wand2, Scissors, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,6 +39,7 @@ export default function VoiceClonePage() {
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const [isTrimming, setIsTrimming] = React.useState(false);
+    const [isTranscribing, setIsTranscribing] = React.useState(false);
 
     const handleFileSelect = (file: File) => {
         if (!file.type.startsWith("audio/")) {
@@ -160,6 +161,36 @@ export default function VoiceClonePage() {
             description: "Reference audio updated successfully",
             variant: "success",
         });
+    };
+
+    const handleAutoTranscribe = async () => {
+        if (!refAudio) {
+            toast({
+                title: "No Audio",
+                description: "Please upload or record reference audio first",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setIsTranscribing(true);
+        try {
+            const transcript = await apiClient.transcribeAudio(refAudio, language);
+            setRefText(transcript);
+            toast({
+                title: "Transcription Complete",
+                description: "Reference text has been automatically filled",
+                variant: "success",
+            });
+        } catch (error) {
+            toast({
+                title: "Transcription Failed",
+                description: error instanceof Error ? error.message : "Unknown error",
+                variant: "destructive",
+            });
+        } finally {
+            setIsTranscribing(false);
+        }
     };
 
     // Clean up URLs on unmount
@@ -313,7 +344,26 @@ export default function VoiceClonePage() {
                     {/* Reference text */}
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                            <Label htmlFor="refText">Reference Transcript</Label>
+                            <div className="flex items-center gap-2">
+                                <Label htmlFor="refText">Reference Transcript</Label>
+                                {!xVectorOnly && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                                        onClick={handleAutoTranscribe}
+                                        disabled={isTranscribing || !refAudio}
+                                        title="Automatically transcribe audio"
+                                    >
+                                        {isTranscribing ? (
+                                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                        ) : (
+                                            <Sparkles className="h-3 w-3 mr-1" />
+                                        )}
+                                        {isTranscribing ? "Transcribing..." : "Auto Transcribe"}
+                                    </Button>
+                                )}
+                            </div>
                             <div className="flex items-center gap-2">
                                 <Label
                                     htmlFor="xVectorOnly"

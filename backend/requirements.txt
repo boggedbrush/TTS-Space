@@ -7,6 +7,7 @@ soundfile>=0.12.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
 torch>=2.0.0
+torchaudio>=2.0.0
 flash-attn>=2.6.0; platform_system != "Darwin"  # Flash attention (CUDA/ROCm, not macOS)
 aiofiles>=23.2.0
 anyio>=4.2.0

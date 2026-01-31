@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse
 
-from app.routers import voice_design, voice_clone, custom_voice, status
+from app.routers import voice_design, voice_clone, custom_voice, status, transcription
 from app.services.tts_manager import tts_manager
 
 # Configure logging
@@ -133,6 +133,7 @@ app.include_router(voice_design.router, prefix="/api", tags=["Voice Design"])
 app.include_router(voice_clone.router, prefix="/api", tags=["Voice Clone"])
 app.include_router(custom_voice.router, prefix="/api", tags=["Custom Voice"])
 app.include_router(status.router, prefix="/api", tags=["Status"])
+app.include_router(transcription.router, prefix="/api", tags=["Transcription"])
 
 
 if __name__ == "__main__":

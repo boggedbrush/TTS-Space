@@ -125,6 +125,30 @@ class APIClient {
         }
     }
 
+    async transcribeAudio(audioFile: File | Blob, language?: string): Promise<string> {
+        const formData = new FormData();
+        formData.append("audio", audioFile);
+        if (language && language !== "Auto") {
+            formData.append("language", language);
+        }
+
+        this.abortController = new AbortController();
+
+        const response = await fetch(`${API_BASE}/transcribe`, {
+            method: "POST",
+            body: formData,
+            signal: this.abortController.signal,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: "Unknown error" }));
+            throw new Error(error.detail || error.message || "Transcription failed");
+        }
+
+        const result = await response.json();
+        return result.text;
+    }
+
     async checkHealth(): Promise<boolean> {
         try {
             const response = await fetch(`${API_BASE}/health`);
