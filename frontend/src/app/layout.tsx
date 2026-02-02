@@ -19,7 +19,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-    title: "Qwen3-TTS Studio | Premium Text-to-Speech",
+    title: "TTS Studio | Premium Text-to-Speech",
     description:
         "State-of-the-art AI voice synthesis with Voice Design, Voice Cloning, and Custom Voices. Generate natural, expressive speech in 10+ languages.",
     keywords: [
@@ -28,11 +28,11 @@ export const metadata: Metadata = {
         "voice synthesis",
         "voice cloning",
         "AI voice",
-        "Qwen3",
+        "TTS Studio",
     ],
     authors: [{ name: "Qwen Team" }],
     openGraph: {
-        title: "Qwen3-TTS Studio",
+        title: "TTS Studio",
         description: "Premium AI Text-to-Speech with Voice Design and Cloning",
         type: "website",
     },

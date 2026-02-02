@@ -83,6 +83,38 @@
     @apply bg-card/80 backdrop-blur-xl border border-border/50 shadow-lg;
   }
 
+  .glass {
+    @apply bg-card/70 backdrop-blur-xl border border-border/50 shadow-lg;
+  }
+
+  .glass-strong {
+    @apply bg-card/90 backdrop-blur-2xl border border-border/60 shadow-xl;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 rounded-full border border-border bg-muted/50 px-4 py-2 text-xs font-semibold text-foreground transition hover:bg-muted disabled:opacity-60;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-full border border-transparent px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-border hover:bg-muted/50 disabled:opacity-60;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-border bg-background/70 px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring/40;
+  }
+
+  .label {
+    @apply text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground;
+  }
+
+  .chip {
+    @apply inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground;
+  }
+
   /* Gradient text */
   .gradient-text {
     @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
@@ -196,4 +228,20 @@ h1, h2, h3, h4, h5, h6 {
 
 code, pre, kbd {
   @apply font-mono;
+}
+
+.text-muted {
+  @apply text-muted-foreground;
+}
+
+.text-danger {
+  @apply text-destructive;
+}
+
+.bg-baseMuted {
+  @apply bg-muted/60;
+}
+
+.bg-baseElevated {
+  @apply bg-card/70;
 }

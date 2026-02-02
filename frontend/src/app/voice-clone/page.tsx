@@ -15,14 +15,18 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { AudioPlayer } from "@/components/audio-player";
+import { ComparePanel } from "@/components/compare-panel";
 import { AudioRecorder } from "@/components/audio-recorder";
 import { AudioTrimmer } from "@/components/audio-trimmer";
 import { apiClient } from "@/lib/api";
 import { LANGUAGES, MODEL_SIZES, voiceCloneSchema } from "@/lib/validators";
 import { toast } from "@/hooks/use-toast";
 import { cn, formatBytes } from "@/lib/utils";
+import { RequestQueue } from "@/lib/queue";
 
 export default function VoiceClonePage() {
+    const compareQueueRef = React.useRef(new RequestQueue(1));
+    const [compareMode, setCompareMode] = React.useState(false);
     const [text, setText] = React.useState("");
     const [language, setLanguage] = React.useState("Auto");
     const [modelSize, setModelSize] = React.useState<"0.6B" | "1.7B">("1.7B");
@@ -541,6 +545,13 @@ export default function VoiceClonePage() {
                                 </>
                             )}
                         </Button>
+                        <Button
+                            variant="outline"
+                            size="lg"
+                            onClick={() => setCompareMode((prev) => !prev)}
+                        >
+                            {compareMode ? "Single Mode" : "Compare"}
+                        </Button>
                         {isGenerating && (
                             <Button variant="outline" size="lg" onClick={handleCancel}>
                                 Cancel
@@ -548,16 +559,32 @@ export default function VoiceClonePage() {
                         )}
                     </div>
 
-                    {/* Audio Player */}
-                    <div className="space-y-3">
-                        <Label>Generated Audio</Label>
-                        <AudioPlayer
-                            audioUrl={audioUrl}
-                            audioBlob={audioBlob}
-                            onRegenerate={handleGenerate}
-                            filename="voice-clone.wav"
-                        />
-                    </div>
+                    {/* Output */}
+                    {compareMode ? (
+                        <div className="space-y-3">
+                            <Label>Compare Variants</Label>
+                            <ComparePanel
+                                queue={compareQueueRef.current}
+                                modeOverride="voiceClone"
+                                hideModeSelect
+                                hideSharedFields
+                                sharedText={text}
+                                sharedLanguage={language}
+                                sharedReferenceText={refText}
+                                sharedReferenceFile={refAudio}
+                                primaryVariant={{ modelSize, xVectorOnly }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <Label>Generated Audio</Label>
+                            <AudioPlayer
+                                audioUrl={audioUrl}
+                                audioBlob={audioBlob}
+                                title="Voice Clone Output"
+                            />
+                        </div>
+                    )}
 
                     {/* Info box */}
                     <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50 border border-border/50">

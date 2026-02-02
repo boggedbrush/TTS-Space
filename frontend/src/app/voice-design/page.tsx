@@ -14,10 +14,12 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { AudioPlayer } from "@/components/audio-player";
+import { ComparePanel } from "@/components/compare-panel";
 import { apiClient } from "@/lib/api";
 import { LANGUAGES, voiceDesignSchema } from "@/lib/validators";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { RequestQueue } from "@/lib/queue";
 
 const VOICE_PRESETS = [
     {
@@ -53,6 +55,8 @@ const VOICE_PRESETS = [
 ];
 
 export default function VoiceDesignPage() {
+    const compareQueueRef = React.useRef(new RequestQueue(1));
+    const [compareMode, setCompareMode] = React.useState(false);
     const [text, setText] = React.useState("");
     const [language, setLanguage] = React.useState("Auto");
     const [voiceDescription, setVoiceDescription] = React.useState("");
@@ -199,6 +203,13 @@ export default function VoiceDesignPage() {
                                 </>
                             )}
                         </Button>
+                        <Button
+                            variant="outline"
+                            size="lg"
+                            onClick={() => setCompareMode((prev) => !prev)}
+                        >
+                            {compareMode ? "Single Mode" : "Compare"}
+                        </Button>
                         {isGenerating && (
                             <Button variant="outline" size="lg" onClick={handleCancel}>
                                 Cancel
@@ -250,16 +261,30 @@ export default function VoiceDesignPage() {
                         </div>
                     </div>
 
-                    {/* Audio Player */}
-                    <div className="space-y-3">
-                        <Label>Generated Audio</Label>
-                        <AudioPlayer
-                            audioUrl={audioUrl}
-                            audioBlob={audioBlob}
-                            onRegenerate={handleGenerate}
-                            filename="voice-design.wav"
-                        />
-                    </div>
+                    {/* Output */}
+                    {compareMode ? (
+                        <div className="space-y-3">
+                            <Label>Compare Variants</Label>
+                            <ComparePanel
+                                queue={compareQueueRef.current}
+                                modeOverride="voiceDesign"
+                                hideModeSelect
+                                hideSharedFields
+                                sharedText={text}
+                                sharedLanguage={language}
+                                primaryVariant={{ voiceDescription }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <Label>Generated Audio</Label>
+                            <AudioPlayer
+                                audioUrl={audioUrl}
+                                audioBlob={audioBlob}
+                                title="Voice Design Output"
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

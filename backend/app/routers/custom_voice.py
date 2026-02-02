@@ -1,14 +1,20 @@
 """Custom Voice API router."""
 
+import base64
 import io
+import json
 import logging
+from typing import AsyncGenerator
 
 import soundfile as sf
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import Response
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import Response, StreamingResponse
 
+from app.config import STREAM_REQUEST_TIMEOUT_S, STREAM_SEGMENT_CHARS
 from app.models import CustomVoiceRequest
 from app.services.tts_manager import tts_manager
+from app.utils.inference import run_inference
+from app.utils.text import split_text
 
 logger = logging.getLogger(__name__)
 
@@ -74,3 +80,50 @@ async def generate_custom_voice(request: CustomVoiceRequest):
     except Exception as e:
         logger.exception("Custom Voice generation failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/custom-voice/stream")
+async def stream_custom_voice(payload: CustomVoiceRequest, request: Request):
+    if payload.speaker not in VALID_SPEAKERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid speaker. Must be one of: {', '.join(sorted(VALID_SPEAKERS))}",
+        )
+    if payload.model_size not in ("0.6B", "1.7B"):
+        raise HTTPException(status_code=400, detail="Invalid model size")
+
+    segments = split_text(payload.text, STREAM_SEGMENT_CHARS) or [payload.text]
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        total = len(segments)
+        for index, segment in enumerate(segments):
+            if await request.is_disconnected():
+                break
+            try:
+                audio, sr = await run_inference(
+                    tts_manager.generate_custom_voice,
+                    text=segment,
+                    language=payload.language,
+                    speaker=payload.speaker,
+                    instruct=payload.instruct,
+                    model_size=payload.model_size,
+                    timeout=STREAM_REQUEST_TIMEOUT_S,
+                )
+                buffer = io.BytesIO()
+                sf.write(buffer, audio, sr, format="WAV")
+                payload_json = json.dumps({
+                    "index": index,
+                    "total": total,
+                    "audio": base64.b64encode(buffer.getvalue()).decode("ascii"),
+                })
+                yield f"data: {payload_json}\n\n"
+            except Exception as exc:
+                payload_json = json.dumps({
+                    "index": index,
+                    "total": total,
+                    "error": f"Generation failed: {exc}",
+                })
+                yield f"data: {payload_json}\n\n"
+                break
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

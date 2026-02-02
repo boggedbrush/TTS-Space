@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Moon, Sun, Mic2, History, GitCompare, Menu, X } from "lucide-react";
+import { Moon, Sun, Mic2, Menu, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,22 +27,22 @@ export function Header() {
 
     return (
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
-            <div className="container mx-auto flex h-16 items-center justify-between px-4">
+            <div className="container mx-auto grid h-16 grid-cols-[1fr_auto_1fr] items-center px-4">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-3 group">
                     <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25 transition-transform group-hover:scale-105">
                         <Mic2 className="h-5 w-5 text-white" />
                     </div>
                     <div className="flex flex-col">
-                        <span className="text-lg font-bold tracking-tight">Qwen3-TTS</span>
+                        <span className="text-lg font-bold tracking-tight">TTS Studio</span>
                         <span className="text-[10px] text-muted-foreground -mt-1">
-                            Studio
+                            Voice Synthesis
                         </span>
                     </div>
                 </Link>
 
                 {/* Desktop Navigation */}
-                <nav className="hidden md:flex items-center gap-1">
+                <nav className="hidden md:flex items-center justify-center gap-1">
                     {navigation.map((item) => {
                         const isActive = pathname === item.href;
                         return (
@@ -75,23 +75,7 @@ export function Header() {
                 </nav>
 
                 {/* Right side actions */}
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="hidden sm:flex"
-                        aria-label="History"
-                    >
-                        <History className="h-5 w-5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="hidden sm:flex"
-                        aria-label="Compare Mode"
-                    >
-                        <GitCompare className="h-5 w-5" />
-                    </Button>
+                <div className="flex items-center justify-end gap-2">
 
                     {/* Theme toggle */}
                     {mounted && (

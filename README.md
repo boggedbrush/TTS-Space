@@ -1,8 +1,8 @@
-# Qwen3-TTS Premium Web Application
+# TTS Studio
 
 A state-of-the-art text-to-speech web application featuring Voice Design, Voice Clone, and Custom Voice modes. Built with Next.js 14 (React + TypeScript + Tailwind CSS) and Python FastAPI.
 
-![Qwen3-TTS Studio](https://img.shields.io/badge/Qwen3--TTS-Studio-violet?style=for-the-badge)
+![TTS Studio](https://img.shields.io/badge/TTS-Studio-violet?style=for-the-badge)
 ![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat-square)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109-green?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)

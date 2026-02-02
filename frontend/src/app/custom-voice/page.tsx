@@ -14,10 +14,12 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { AudioPlayer } from "@/components/audio-player";
+import { ComparePanel } from "@/components/compare-panel";
 import { apiClient } from "@/lib/api";
 import { LANGUAGES, SPEAKERS, MODEL_SIZES, customVoiceSchema } from "@/lib/validators";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { RequestQueue } from "@/lib/queue";
 
 const SPEAKER_STYLES: Record<string, { name: string; description: string }[]> = {
     Vivian: [
@@ -41,6 +43,8 @@ const SPEAKER_STYLES: Record<string, { name: string; description: string }[]> = 
 };
 
 export default function CustomVoicePage() {
+    const compareQueueRef = React.useRef(new RequestQueue(1));
+    const [compareMode, setCompareMode] = React.useState(false);
     const [text, setText] = React.useState("");
     const [language, setLanguage] = React.useState("Auto");
     const [speaker, setSpeaker] = React.useState("");
@@ -233,6 +237,13 @@ export default function CustomVoicePage() {
                                 </>
                             )}
                         </Button>
+                        <Button
+                            variant="outline"
+                            size="lg"
+                            onClick={() => setCompareMode((prev) => !prev)}
+                        >
+                            {compareMode ? "Single Mode" : "Compare"}
+                        </Button>
                         {isGenerating && (
                             <Button variant="outline" size="lg" onClick={handleCancel}>
                                 Cancel
@@ -282,16 +293,34 @@ export default function CustomVoicePage() {
                         </div>
                     </div>
 
-                    {/* Audio Player */}
-                    <div className="space-y-3">
-                        <Label>Generated Audio</Label>
-                        <AudioPlayer
-                            audioUrl={audioUrl}
-                            audioBlob={audioBlob}
-                            onRegenerate={handleGenerate}
-                            filename={`${speaker || "custom"}-voice.wav`}
-                        />
-                    </div>
+                    {/* Output */}
+                    {compareMode ? (
+                        <div className="space-y-3">
+                            <Label>Compare Variants</Label>
+                            <ComparePanel
+                                queue={compareQueueRef.current}
+                                modeOverride="customVoice"
+                                hideModeSelect
+                                hideSharedFields
+                                sharedText={text}
+                                sharedLanguage={language}
+                                primaryVariant={{
+                                    speaker: speaker || undefined,
+                                    styleInstruction: instruct || undefined,
+                                    modelSize,
+                                }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <Label>Generated Audio</Label>
+                            <AudioPlayer
+                                audioUrl={audioUrl}
+                                audioBlob={audioBlob}
+                                title="Custom Voice Output"
+                            />
+                        </div>
+                    )}
 
                     {/* Info box */}
                     <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50 border border-border/50">

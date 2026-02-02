@@ -1,5 +1,6 @@
 """Audio decoding helpers with ffmpeg fallback."""
 
+import io
 import logging
 import os
 import subprocess
@@ -64,3 +65,15 @@ def load_audio_with_fallback(input_path: str) -> tuple[np.ndarray, int]:
                 os.unlink(wav_path)
             except OSError:
                 pass
+
+
+def audio_to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
+    buffer = io.BytesIO()
+    sf.write(buffer, audio, sample_rate, format="WAV")
+    return buffer.getvalue()
+
+
+def serialize_audio(audio: np.ndarray, sample_rate: int) -> tuple[bytes, float, int]:
+    wav_bytes = audio_to_wav_bytes(audio, sample_rate)
+    duration = len(audio) / sample_rate if sample_rate else 0.0
+    return wav_bytes, duration, sample_rate

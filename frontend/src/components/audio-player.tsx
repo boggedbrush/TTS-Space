@@ -1,370 +1,304 @@
 "use client";
 
-import * as React from "react";
-import { motion } from "framer-motion";
 import {
-    Play,
-    Pause,
-    Volume2,
-    VolumeX,
-    Download,
-    RotateCcw,
-    Settings2,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn, formatDuration, downloadBlob } from "@/lib/utils";
+    forwardRef,
+    useEffect,
+    useImperativeHandle,
+    useRef,
+    useState,
+} from "react";
+import WaveSurfer from "wavesurfer.js";
+import { Pause, Play, RotateCcw, RotateCw, Volume2 } from "lucide-react";
+import { Icon } from "@/components/icon";
+import { computeNormalizationGain } from "@/lib/audio";
+import { cn, formatDuration } from "@/lib/utils";
+
+export interface AudioPlayerRef {
+    play: () => void;
+    pause: () => void;
+    seekTo: (progress: number) => void;
+    getDuration: () => number;
+    getCurrentTime: () => number;
+    setRate: (rate: number) => void;
+}
 
 interface AudioPlayerProps {
-    audioUrl: string | null;
-    audioBlob: Blob | null;
+    audioUrl?: string | null;
+    audioBlob?: Blob | null;
+    title?: string;
     className?: string;
-    onRegenerate?: () => void;
-    filename?: string;
+    enableNormalization?: boolean;
 }
 
-export function AudioPlayer({
-    audioUrl,
-    audioBlob,
-    className,
-    onRegenerate,
-    filename = "audio.wav",
-}: AudioPlayerProps) {
-    const audioRef = React.useRef<HTMLAudioElement>(null);
-    const canvasRef = React.useRef<HTMLCanvasElement>(null);
-    const animationRef = React.useRef<number | null>(null);
-    const audioContextRef = React.useRef<AudioContext | null>(null);
-    const analyserRef = React.useRef<AnalyserNode | null>(null);
-    const sourceRef = React.useRef<MediaElementAudioSourceNode | null>(null);
+export const AudioPlayer = forwardRef<AudioPlayerRef, AudioPlayerProps>(
+    ({ audioUrl, audioBlob, title, className, enableNormalization = true }, ref) => {
+        const containerRef = useRef<HTMLDivElement | null>(null);
+        const waveRef = useRef<WaveSurfer | null>(null);
+        const [isReady, setIsReady] = useState(false);
+        const [isPlaying, setIsPlaying] = useState(false);
+        const [currentTime, setCurrentTime] = useState(0);
+        const [duration, setDuration] = useState(0);
+        const [playbackRate, setPlaybackRate] = useState(1);
+        const [loopStart, setLoopStart] = useState<number | null>(null);
+        const [loopEnd, setLoopEnd] = useState<number | null>(null);
+        const [loopEnabled, setLoopEnabled] = useState(false);
+        const [normalizationEnabled, setNormalizationEnabled] = useState(enableNormalization);
+        const [targetDb, setTargetDb] = useState(-16);
+        const [gain, setGain] = useState(1);
+        const [isActive, setIsActive] = useState(false);
 
-    const [isPlaying, setIsPlaying] = React.useState(false);
-    const [currentTime, setCurrentTime] = React.useState(0);
-    const [duration, setDuration] = React.useState(0);
-    const [volume, setVolume] = React.useState(1);
-    const [isMuted, setIsMuted] = React.useState(false);
-    const [playbackRate, setPlaybackRate] = React.useState(1);
+        useImperativeHandle(
+            ref,
+            () => ({
+                play: () => waveRef.current?.play(),
+                pause: () => waveRef.current?.pause(),
+                seekTo: (progress) => waveRef.current?.seekTo(progress),
+                getDuration: () => waveRef.current?.getDuration() || 0,
+                getCurrentTime: () => waveRef.current?.getCurrentTime() || 0,
+                setRate: (rate) => {
+                    setPlaybackRate(rate);
+                    waveRef.current?.setPlaybackRate(rate);
+                },
+            }),
+            [],
+        );
 
-    // Keyboard shortcuts
-    React.useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        useEffect(() => {
+            if (!containerRef.current) return;
+            const wave = WaveSurfer.create({
+                container: containerRef.current,
+                waveColor: "rgba(125, 211, 252, 0.35)",
+                progressColor: "rgba(59, 130, 246, 0.9)",
+                cursorColor: "rgba(148, 163, 184, 0.8)",
+                barWidth: 2,
+                barGap: 2,
+                height: 80,
+                normalize: false,
+                autoCenter: true,
+            });
+            waveRef.current = wave;
+
+            wave.on("ready", () => {
+                setIsReady(true);
+                setDuration(wave.getDuration());
+                setGain(1);
+            });
+            wave.on("audioprocess", () => setCurrentTime(wave.getCurrentTime()));
+            wave.on("timeupdate", () => setCurrentTime(wave.getCurrentTime()));
+            wave.on("play", () => setIsPlaying(true));
+            wave.on("pause", () => setIsPlaying(false));
+            wave.on("finish", () => setIsPlaying(false));
+
+            return () => {
+                wave.destroy();
+                waveRef.current = null;
+            };
+        }, []);
+
+        useEffect(() => {
+            if (!audioUrl || !waveRef.current) return;
+            setIsReady(false);
+            waveRef.current.load(audioUrl);
+        }, [audioUrl]);
+
+        useEffect(() => {
+            if (!waveRef.current) return;
+            waveRef.current.setPlaybackRate(playbackRate);
+        }, [playbackRate]);
+
+        useEffect(() => {
+            if (!loopEnabled || loopStart === null || loopEnd === null) return;
+            const wave = waveRef.current;
+            if (!wave) return;
+            const handler = () => {
+                if (wave.getCurrentTime() >= loopEnd) {
+                    wave.setTime(loopStart);
+                }
+            };
+            wave.on("audioprocess", handler);
+            return () => {
+                wave.un("audioprocess", handler);
+            };
+        }, [loopEnabled, loopStart, loopEnd]);
+
+        useEffect(() => {
+            if (loopStart === null || loopEnd === null) return;
+            if (loopStart <= loopEnd) return;
+            setLoopStart(loopEnd);
+            setLoopEnd(loopStart);
+        }, [loopStart, loopEnd]);
+
+        useEffect(() => {
+            if (!audioBlob || !normalizationEnabled) {
+                waveRef.current?.setVolume(1);
+                setGain(1);
                 return;
             }
-
-            switch (e.key.toLowerCase()) {
-                case " ":
-                    e.preventDefault();
-                    togglePlay();
-                    break;
-                case "j":
-                    if (audioRef.current) {
-                        audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
+            let cancelled = false;
+            audioBlob.arrayBuffer().then((buffer) => {
+                const context = new AudioContext();
+                context.decodeAudioData(buffer.slice(0)).then((audioBuffer) => {
+                    if (cancelled) return;
+                    const channel = audioBuffer.getChannelData(0);
+                    let sum = 0;
+                    for (let i = 0; i < channel.length; i += 1) {
+                        sum += channel[i] * channel[i];
                     }
-                    break;
-                case "l":
-                    if (audioRef.current) {
-                        audioRef.current.currentTime = Math.min(
-                            duration,
-                            audioRef.current.currentTime + 10
-                        );
-                    }
-                    break;
-                case "k":
-                    togglePlay();
-                    break;
-                case "m":
-                    toggleMute();
-                    break;
-            }
-        };
+                    const rms = Math.sqrt(sum / channel.length);
+                    const computed = computeNormalizationGain(rms, targetDb);
+                    setGain(computed);
+                    waveRef.current?.setVolume(computed);
+                    context.close();
+                });
+            });
+            return () => {
+                cancelled = true;
+            };
+        }, [audioBlob, normalizationEnabled, targetDb]);
 
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [duration]);
+        useEffect(() => {
+            if (!isActive) return;
+            const handler = (event: KeyboardEvent) => {
+                if (["INPUT", "TEXTAREA"].includes((event.target as HTMLElement)?.tagName)) return;
+                if (event.code === "Space") {
+                    event.preventDefault();
+                    waveRef.current?.playPause();
+                }
+                if (event.key.toLowerCase() === "j") {
+                    event.preventDefault();
+                    waveRef.current?.skip(-10);
+                }
+                if (event.key.toLowerCase() === "k") {
+                    event.preventDefault();
+                    waveRef.current?.playPause();
+                }
+                if (event.key.toLowerCase() === "l") {
+                    event.preventDefault();
+                    waveRef.current?.skip(10);
+                }
+            };
+            window.addEventListener("keydown", handler);
+            return () => window.removeEventListener("keydown", handler);
+        }, [isActive]);
 
-    // Setup audio context and analyser for waveform
-    React.useEffect(() => {
-        if (!audioRef.current || !canvasRef.current || !audioUrl) return;
-
-        if (!audioContextRef.current) {
-            audioContextRef.current = new AudioContext();
-            analyserRef.current = audioContextRef.current.createAnalyser();
-            analyserRef.current.fftSize = 256;
-            sourceRef.current = audioContextRef.current.createMediaElementSource(
-                audioRef.current
+        if (!audioUrl) {
+            return (
+                <div className={cn("glass rounded-2xl p-6 text-center", className)}>
+                    <Volume2 className="mx-auto h-10 w-10 text-muted-foreground/60" />
+                    <p className="mt-3 text-sm text-muted">Generate audio to preview the player.</p>
+                </div>
             );
-            sourceRef.current.connect(analyserRef.current);
-            analyserRef.current.connect(audioContextRef.current.destination);
         }
 
-        return () => {
-            if (animationRef.current !== null) {
-                cancelAnimationFrame(animationRef.current);
-            }
-        };
-    }, [audioUrl]);
-
-    // Draw waveform visualization
-    const drawWaveform = React.useCallback(() => {
-        if (!canvasRef.current || !analyserRef.current) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        const bufferLength = analyserRef.current.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        analyserRef.current.getByteFrequencyData(dataArray);
-
-        ctx.fillStyle = "hsl(var(--muted) / 0.3)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        const barWidth = (canvas.width / bufferLength) * 2.5;
-        let x = 0;
-
-        for (let i = 0; i < bufferLength; i++) {
-            const barHeight = (dataArray[i] / 255) * canvas.height;
-
-            const gradient = ctx.createLinearGradient(0, canvas.height - barHeight, 0, canvas.height);
-            gradient.addColorStop(0, "hsl(262 83% 58%)");
-            gradient.addColorStop(1, "hsl(330 81% 60%)");
-            ctx.fillStyle = gradient;
-
-            ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
-            x += barWidth + 1;
-        }
-
-        if (isPlaying) {
-            animationRef.current = requestAnimationFrame(drawWaveform);
-        }
-    }, [isPlaying]);
-
-    React.useEffect(() => {
-        if (isPlaying) {
-            drawWaveform();
-        } else if (animationRef.current !== null) {
-            cancelAnimationFrame(animationRef.current);
-        }
-    }, [isPlaying, drawWaveform]);
-
-    const togglePlay = () => {
-        if (!audioRef.current) return;
-        if (isPlaying) {
-            audioRef.current.pause();
-        } else {
-            audioRef.current.play();
-        }
-        setIsPlaying(!isPlaying);
-    };
-
-    const toggleMute = () => {
-        if (!audioRef.current) return;
-        audioRef.current.muted = !isMuted;
-        setIsMuted(!isMuted);
-    };
-
-    const handleTimeUpdate = () => {
-        if (audioRef.current) {
-            setCurrentTime(audioRef.current.currentTime);
-        }
-    };
-
-    const handleLoadedMetadata = () => {
-        if (audioRef.current) {
-            setDuration(audioRef.current.duration);
-        }
-    };
-
-    const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!audioRef.current) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        const percent = (e.clientX - rect.left) / rect.width;
-        audioRef.current.currentTime = percent * duration;
-    };
-
-    const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newVolume = parseFloat(e.target.value);
-        setVolume(newVolume);
-        if (audioRef.current) {
-            audioRef.current.volume = newVolume;
-        }
-    };
-
-    const handleDownload = () => {
-        if (audioBlob) {
-            downloadBlob(audioBlob, filename);
-        }
-    };
-
-    const playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 2];
-
-    const cyclePlaybackRate = () => {
-        const currentIndex = playbackRates.indexOf(playbackRate);
-        const nextIndex = (currentIndex + 1) % playbackRates.length;
-        const newRate = playbackRates[nextIndex];
-        setPlaybackRate(newRate);
-        if (audioRef.current) {
-            audioRef.current.playbackRate = newRate;
-        }
-    };
-
-    if (!audioUrl) {
         return (
             <div
-                className={cn(
-                    "rounded-xl border border-dashed border-border/50 bg-card/50 p-8 text-center",
-                    className
-                )}
+                className={cn("glass rounded-2xl p-4", className)}
+                onMouseEnter={() => setIsActive(true)}
+                onMouseLeave={() => setIsActive(false)}
+                onFocus={() => setIsActive(true)}
+                onBlur={() => setIsActive(false)}
             >
-                <div className="text-muted-foreground">
-                    <Volume2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Generate audio to see the player</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-semibold text-foreground">
+                            {title || "Generated audio"}
+                        </p>
+                        <p className="text-xs text-muted">
+                            {formatDuration(currentTime)} / {formatDuration(duration)}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button type="button" className="btn-ghost" onClick={() => waveRef.current?.skip(-5)}>
+                            <Icon icon={RotateCcw} size={16} />
+                        </button>
+                        <button
+                            type="button"
+                            className="btn-primary"
+                            onClick={() => waveRef.current?.playPause()}
+                            disabled={!isReady}
+                        >
+                            {isPlaying ? <Icon icon={Pause} size={16} /> : <Icon icon={Play} size={16} />}
+                            {isPlaying ? "Pause" : "Play"}
+                        </button>
+                        <button type="button" className="btn-ghost" onClick={() => waveRef.current?.skip(5)}>
+                            <Icon icon={RotateCw} size={16} />
+                        </button>
+                    </div>
                 </div>
+
+                <div className="mt-4" ref={containerRef} aria-hidden="true" />
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr]">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                        <span>Speed</span>
+                        {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
+                            <button
+                                key={rate}
+                                type="button"
+                                className={cn(
+                                    "rounded-full border px-3 py-1",
+                                    playbackRate === rate
+                                        ? "border-accent bg-accent/10 text-foreground"
+                                        : "border-border",
+                                )}
+                                onClick={() => setPlaybackRate(rate)}
+                            >
+                                {rate}x
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                        <span>Loop</span>
+                        <button type="button" className="btn-ghost" onClick={() => setLoopStart(currentTime)}>
+                            Set In
+                        </button>
+                        <button type="button" className="btn-ghost" onClick={() => setLoopEnd(currentTime)}>
+                            Set Out
+                        </button>
+                        <button
+                            type="button"
+                            className={cn(
+                                "btn-ghost",
+                                loopEnabled ? "bg-accent/20 text-foreground" : "",
+                            )}
+                            onClick={() => setLoopEnabled((prev) => !prev)}
+                            disabled={loopStart === null || loopEnd === null}
+                        >
+                            Loop {loopEnabled ? "On" : "Off"}
+                        </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                        <span>Normalize</span>
+                        <button
+                            type="button"
+                            className={cn(
+                                "btn-ghost",
+                                normalizationEnabled ? "bg-accent/20 text-foreground" : "",
+                            )}
+                            onClick={() => setNormalizationEnabled((prev) => !prev)}
+                        >
+                            {normalizationEnabled ? "On" : "Off"}
+                        </button>
+                        <input
+                            type="number"
+                            className="input h-9 w-20 text-xs"
+                            min={-24}
+                            max={-6}
+                            step={1}
+                            value={targetDb}
+                            onChange={(event) => setTargetDb(Number(event.target.value))}
+                            aria-label="Loudness target"
+                            disabled={!normalizationEnabled}
+                        />
+                        <span className="text-[10px]">dB target · gain {gain.toFixed(2)}</span>
+                    </div>
+                </div>
+                <p className="mt-3 text-[10px] text-muted">
+                    Hotkeys: Space / J / K / L · Hover player to enable.
+                </p>
             </div>
         );
-    }
+    },
+);
 
-    return (
-        <div
-            className={cn(
-                "rounded-xl border border-border/50 bg-card/50 backdrop-blur p-4",
-                className
-            )}
-        >
-            <audio
-                ref={audioRef}
-                src={audioUrl}
-                onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={handleLoadedMetadata}
-                onEnded={() => setIsPlaying(false)}
-            />
-
-            {/* Waveform visualization */}
-            <div
-                className="relative h-20 w-full rounded-lg overflow-hidden bg-muted/30 mb-4 cursor-pointer"
-                onClick={handleSeek}
-            >
-                <canvas
-                    ref={canvasRef}
-                    className="w-full h-full"
-                    width={800}
-                    height={80}
-                />
-                {/* Progress overlay */}
-                <div
-                    className="absolute inset-0 bg-primary/10"
-                    style={{ width: `${(currentTime / duration) * 100}%` }}
-                />
-                {/* Playhead */}
-                <motion.div
-                    className="absolute top-0 bottom-0 w-0.5 bg-primary"
-                    style={{ left: `${(currentTime / duration) * 100}%` }}
-                    layoutId="playhead"
-                />
-            </div>
-
-            {/* Controls */}
-            <div className="flex items-center gap-4">
-                {/* Play/Pause */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={togglePlay}
-                    className="h-12 w-12 rounded-full bg-primary/10 hover:bg-primary/20"
-                    aria-label={isPlaying ? "Pause" : "Play"}
-                >
-                    {isPlaying ? (
-                        <Pause className="h-5 w-5" />
-                    ) : (
-                        <Play className="h-5 w-5 ml-0.5" />
-                    )}
-                </Button>
-
-                {/* Time display */}
-                <div className="flex items-center gap-1 text-sm tabular-nums">
-                    <span className="text-foreground">{formatDuration(currentTime)}</span>
-                    <span className="text-muted-foreground">/</span>
-                    <span className="text-muted-foreground">{formatDuration(duration)}</span>
-                </div>
-
-                {/* Spacer */}
-                <div className="flex-1" />
-
-                {/* Playback speed */}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={cyclePlaybackRate}
-                    className="tabular-nums text-xs"
-                    aria-label={`Playback speed: ${playbackRate}x`}
-                >
-                    {playbackRate}x
-                </Button>
-
-                {/* Volume */}
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={toggleMute}
-                        aria-label={isMuted ? "Unmute" : "Mute"}
-                    >
-                        {isMuted || volume === 0 ? (
-                            <VolumeX className="h-4 w-4" />
-                        ) : (
-                            <Volume2 className="h-4 w-4" />
-                        )}
-                    </Button>
-                    <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={volume}
-                        onChange={handleVolumeChange}
-                        className="w-20 h-1 accent-primary"
-                        aria-label="Volume"
-                    />
-                </div>
-
-                {/* Regenerate */}
-                {onRegenerate && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={onRegenerate}
-                        aria-label="Regenerate"
-                    >
-                        <RotateCcw className="h-4 w-4" />
-                    </Button>
-                )}
-
-                {/* Download */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleDownload}
-                    disabled={!audioBlob}
-                    aria-label="Download"
-                >
-                    <Download className="h-4 w-4" />
-                </Button>
-            </div>
-
-            {/* Keyboard shortcuts hint */}
-            <div className="mt-3 pt-3 border-t border-border/50 text-xs text-muted-foreground flex flex-wrap gap-4">
-                <span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">Space</kbd> Play/Pause
-                </span>
-                <span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">J</kbd> -10s
-                </span>
-                <span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">L</kbd> +10s
-                </span>
-                <span>
-                    <kbd className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono">M</kbd> Mute
-                </span>
-            </div>
-        </div>
-    );
-}
+AudioPlayer.displayName = "AudioPlayer";
