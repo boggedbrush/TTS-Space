@@ -15,7 +15,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { AudioPlayer } from "@/components/audio-player";
-import { ComparePanel } from "@/components/compare-panel";
+import { ComparePanel, type ComparePanelHandle } from "@/components/compare-panel";
 import { AudioRecorder } from "@/components/audio-recorder";
 import { AudioTrimmer } from "@/components/audio-trimmer";
 import { apiClient } from "@/lib/api";
@@ -23,6 +23,7 @@ import { LANGUAGES, MODEL_SIZES, voiceCloneSchema } from "@/lib/validators";
 import { toast } from "@/hooks/use-toast";
 import { cn, formatBytes } from "@/lib/utils";
 import { RequestQueue } from "@/lib/queue";
+import { useGenerationGuard } from "@/components/generation-guard";
 
 export default function VoiceClonePage() {
     const compareQueueRef = React.useRef(new RequestQueue(1));
@@ -34,14 +35,19 @@ export default function VoiceClonePage() {
     const [refText, setRefText] = React.useState("");
     const [xVectorOnly, setXVectorOnly] = React.useState(false);
     const [isGenerating, setIsGenerating] = React.useState(false);
+    const [isCompareGenerating, setIsCompareGenerating] = React.useState(false);
     const [audioUrl, setAudioUrl] = React.useState<string | null>(null);
     const [audioBlob, setAudioBlob] = React.useState<Blob | null>(null);
     const [refAudioUrl, setRefAudioUrl] = React.useState<string | null>(null);
     const [isDragging, setIsDragging] = React.useState(false);
     const [inputMode, setInputMode] = React.useState<"file" | "mic">("file");
 
+    useGenerationGuard(isGenerating || isCompareGenerating);
+
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const transcribeRequestIdRef = React.useRef(0);
+    const comparePanelRef = React.useRef<ComparePanelHandle | null>(null);
+    const compareCancelRef = React.useRef<(() => void) | null>(null);
 
     const [isTrimming, setIsTrimming] = React.useState(false);
     const [isTranscribing, setIsTranscribing] = React.useState(false);
@@ -159,6 +165,22 @@ export default function VoiceClonePage() {
     const handleCancel = () => {
         apiClient.cancel();
         setIsGenerating(false);
+    };
+
+    const handlePrimaryGenerate = () => {
+        if (compareMode) {
+            comparePanelRef.current?.generate();
+            return;
+        }
+        void handleGenerate();
+    };
+
+    const handlePrimaryCancel = () => {
+        if (compareMode) {
+            compareCancelRef.current?.();
+            return;
+        }
+        handleCancel();
     };
 
     const removeRefAudio = () => {
@@ -532,11 +554,25 @@ export default function VoiceClonePage() {
                             variant="gradient"
                             size="lg"
                             className="flex-1"
-                            onClick={handleGenerate}
-                            loading={isGenerating}
-                            disabled={!text || !refAudio || (!xVectorOnly && !refText)}
+                            onClick={handlePrimaryGenerate}
+                            loading={compareMode ? isCompareGenerating : isGenerating}
+                            disabled={
+                                !text ||
+                                !refAudio ||
+                                (!xVectorOnly && !refText) ||
+                                (compareMode ? isCompareGenerating : isGenerating)
+                            }
                         >
-                            {isGenerating ? (
+                            {compareMode ? (
+                                isCompareGenerating ? (
+                                    "Cloning..."
+                                ) : (
+                                    <>
+                                        <Wand2 className="h-4 w-4 mr-2" />
+                                        Clone Voice
+                                    </>
+                                )
+                            ) : isGenerating ? (
                                 "Cloning..."
                             ) : (
                                 <>
@@ -548,12 +584,17 @@ export default function VoiceClonePage() {
                         <Button
                             variant="outline"
                             size="lg"
+                            title={
+                                compareMode
+                                    ? "Generates one audio output with the current settings."
+                                    : "Generates audio more than once with different settings if you want."
+                            }
                             onClick={() => setCompareMode((prev) => !prev)}
                         >
-                            {compareMode ? "Single Mode" : "Compare"}
+                            {compareMode ? "Single Mode" : "Multi Mode"}
                         </Button>
-                        {isGenerating && (
-                            <Button variant="outline" size="lg" onClick={handleCancel}>
+                        {(compareMode ? isCompareGenerating : isGenerating) && (
+                            <Button variant="outline" size="lg" onClick={handlePrimaryCancel}>
                                 Cancel
                             </Button>
                         )}
@@ -562,8 +603,9 @@ export default function VoiceClonePage() {
                     {/* Output */}
                     {compareMode ? (
                         <div className="space-y-3">
-                            <Label>Compare Variants</Label>
+                            <Label>Multi Mode Variants</Label>
                             <ComparePanel
+                                ref={comparePanelRef}
                                 queue={compareQueueRef.current}
                                 modeOverride="voiceClone"
                                 hideModeSelect
@@ -573,6 +615,10 @@ export default function VoiceClonePage() {
                                 sharedReferenceText={refText}
                                 sharedReferenceFile={refAudio}
                                 primaryVariant={{ modelSize, xVectorOnly }}
+                                onGeneratingChange={setIsCompareGenerating}
+                                onCancelAvailable={(cancel) => {
+                                    compareCancelRef.current = cancel;
+                                }}
                             />
                         </div>
                     ) : (

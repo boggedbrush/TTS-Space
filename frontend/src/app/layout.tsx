@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { HeaderClient } from "@/components/header-client";
 import { StatusBarWrapper } from "@/components/status-bar-wrapper";
+import { GenerationGuardProvider } from "@/components/generation-guard";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -59,18 +60,20 @@ export default function RootLayout({
                     enableSystem
                     disableTransitionOnChange
                 >
-                    <div className="relative min-h-screen bg-background">
-                        {/* Gradient background effect */}
-                        <div className="fixed inset-0 -z-10 overflow-hidden">
-                            <div className="absolute -top-[40%] -left-[20%] h-[80%] w-[60%] rounded-full bg-primary/5 blur-3xl" />
-                            <div className="absolute -bottom-[40%] -right-[20%] h-[80%] w-[60%] rounded-full bg-accent/5 blur-3xl" />
-                        </div>
+                    <GenerationGuardProvider>
+                        <div className="relative min-h-screen bg-background">
+                            {/* Gradient background effect */}
+                            <div className="fixed inset-0 -z-10 overflow-hidden">
+                                <div className="absolute -top-[40%] -left-[20%] h-[80%] w-[60%] rounded-full bg-primary/5 blur-3xl" />
+                                <div className="absolute -bottom-[40%] -right-[20%] h-[80%] w-[60%] rounded-full bg-accent/5 blur-3xl" />
+                            </div>
 
-                        <HeaderClient />
-                        <main className="container mx-auto px-4 py-8">{children}</main>
-                    </div>
-                    <StatusBarWrapper />
-                    <Toaster />
+                            <HeaderClient />
+                            <main className="container mx-auto px-4 py-8">{children}</main>
+                        </div>
+                        <StatusBarWrapper />
+                        <Toaster />
+                    </GenerationGuardProvider>
                 </ThemeProvider>
             </body>
         </html>

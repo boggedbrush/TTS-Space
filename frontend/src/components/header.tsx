@@ -27,15 +27,17 @@ export function Header() {
 
     return (
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
-            <div className="container mx-auto grid h-16 grid-cols-[1fr_auto_1fr] items-center px-4">
+            <div className="container mx-auto flex h-16 items-center justify-between px-4 md:grid md:grid-cols-[1fr_auto_1fr]">
                 {/* Logo */}
-                <Link href="/" className="flex items-center gap-3 group">
-                    <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25 transition-transform group-hover:scale-105">
+                <Link href="/" className="flex min-w-0 items-center gap-3 group">
+                    <div className="relative flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/25 transition-transform group-hover:scale-105">
                         <Mic2 className="h-5 w-5 text-white" />
                     </div>
-                    <div className="flex flex-col">
-                        <span className="text-lg font-bold tracking-tight">TTS Studio</span>
-                        <span className="text-[10px] text-muted-foreground -mt-1">
+                    <div className="flex min-w-0 flex-col">
+                        <span className="truncate text-base font-bold tracking-tight md:text-lg">
+                            TTS Studio
+                        </span>
+                        <span className="hidden text-[10px] text-muted-foreground -mt-1 sm:inline">
                             Voice Synthesis
                         </span>
                     </div>

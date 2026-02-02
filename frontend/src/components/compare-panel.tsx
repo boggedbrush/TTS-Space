@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Loader2, Plus, Play } from "lucide-react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Plus, Play } from "lucide-react";
 import { Icon } from "@/components/icon";
 import { LANGUAGES, MODEL_IDS, MODEL_SIZES, SPEAKERS } from "@/lib/constants";
 import { RequestQueue } from "@/lib/queue";
@@ -10,6 +10,7 @@ import { decodeAudioMetadata, concatAudioBuffers, encodeWav } from "@/lib/audio"
 import { buildGenerationResult, generateCustomVoice, generateVoiceClone, generateVoiceDesign } from "@/lib/api";
 import { AudioPlayer, AudioPlayerRef } from "@/components/audio-player";
 import { GenerationResult } from "@/lib/types";
+import { useGenerationGuard } from "@/components/generation-guard";
 
 const MODE_OPTIONS = [
   { value: "customVoice", label: "CustomVoice" },
@@ -39,19 +40,31 @@ interface ComparePanelProps {
   sharedReferenceFile?: File | null;
   hideSharedFields?: boolean;
   primaryVariant?: Partial<Variant>;
+  onGeneratingChange?: (isGenerating: boolean) => void;
+  onCancelAvailable?: (cancel: (() => void) | null) => void;
 }
 
-export function ComparePanel({
-  queue,
-  modeOverride,
-  hideModeSelect,
-  sharedText,
-  sharedLanguage,
-  sharedReferenceText,
-  sharedReferenceFile,
-  hideSharedFields,
-  primaryVariant
-}: ComparePanelProps) {
+export interface ComparePanelHandle {
+  generate: () => void;
+  cancel: () => void;
+}
+
+export const ComparePanel = forwardRef<ComparePanelHandle, ComparePanelProps>(function ComparePanel(
+  {
+    queue,
+    modeOverride,
+    hideModeSelect,
+    sharedText,
+    sharedLanguage,
+    sharedReferenceText,
+    sharedReferenceFile,
+    hideSharedFields,
+    primaryVariant,
+    onGeneratingChange,
+    onCancelAvailable
+  },
+  ref
+) {
   const createId = () => crypto.randomUUID();
   const [mode, setMode] = useState<CompareMode>(modeOverride || "customVoice");
   const [text, setText] = useState(sharedText ?? "");
@@ -73,9 +86,9 @@ export function ComparePanel({
       label: "Variant B",
       speaker: "Serena",
       styleInstruction: "Bright and friendly",
-      modelSize: "0.6B",
+      modelSize: "1.7B",
       voiceDescription: "An upbeat storyteller with friendly energy",
-      xVectorOnly: true,
+      xVectorOnly: false,
     },
   ]);
   const [results, setResults] = useState<Record<string, GenerationResult>>({});
@@ -83,6 +96,8 @@ export function ComparePanel({
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [cancelTask, setCancelTask] = useState<(() => void) | null>(null);
+
+  useGenerationGuard(isGenerating);
 
   const playerRefs = useRef<Record<string, AudioPlayerRef | null>>({});
 
@@ -122,6 +137,14 @@ export function ComparePanel({
     });
   }, [primarySignature, primaryVariant]);
 
+  useEffect(() => {
+    onGeneratingChange?.(isGenerating);
+  }, [isGenerating, onGeneratingChange]);
+
+  useEffect(() => {
+    onCancelAvailable?.(cancelTask);
+  }, [cancelTask, onCancelAvailable]);
+
   const updateVariant = (id: string, field: keyof Variant, value: string | boolean) => {
     setVariants((prev) =>
       prev.map((variant) => (variant.id === id ? { ...variant, [field]: value } : variant))
@@ -144,6 +167,7 @@ export function ComparePanel({
   };
 
   const handleGenerate = async () => {
+    if (isGenerating) return;
     setError(null);
     setIsGenerating(true);
     setProgress(null);
@@ -250,6 +274,19 @@ export function ComparePanel({
     }
   };
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      generate: () => {
+        void handleGenerate();
+      },
+      cancel: () => {
+        cancelTask?.();
+      }
+    }),
+    [cancelTask, handleGenerate]
+  );
+
   const playAll = () => {
     Object.values(playerRefs.current).forEach((player) => {
       player?.seekTo(0);
@@ -266,7 +303,7 @@ export function ComparePanel({
           {!hideModeSelect && (
             <>
               <label className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-                Compare mode
+                Multi Mode
               </label>
               <select
                 className="input w-48"
@@ -284,12 +321,6 @@ export function ComparePanel({
           <button type="button" className="btn-secondary" onClick={addVariant}>
             <Icon icon={Plus} size={16} />
             Add variant
-          </button>
-          <button type="button" className="btn-primary" onClick={handleGenerate} disabled={isGenerating}>
-            {isGenerating ? (
-              <Icon icon={Loader2} size={16} className="animate-spin motion-reduce:animate-none" />
-            ) : null}
-            Generate variants
           </button>
           {isGenerating && cancelTask && (
             <button type="button" className="btn-ghost" onClick={() => cancelTask()}>
@@ -479,7 +510,7 @@ export function ComparePanel({
       </div>
     </div>
   );
-}
+});
 
 async function stitchSegments(blobs: Blob[]) {
   if (blobs.length === 1) return blobs[0];

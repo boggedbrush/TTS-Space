@@ -14,6 +14,7 @@ import { decodeAudioMetadata, concatAudioBuffers, encodeWav } from "@/lib/audio"
 import { splitTextSmart } from "@/lib/split";
 import { GenerationResult, CustomVoiceSettings } from "@/lib/types";
 import { ResultCard } from "@/components/result-card";
+import { useGenerationGuard } from "@/components/generation-guard";
 
 const schema = z.object({
   text: z.string().min(1, "Text is required"),
@@ -70,6 +71,8 @@ export function CustomVoiceForm({
   const [isGenerating, setIsGenerating] = useState(false);
   const [streaming, setStreaming] = useState(true);
   const [cancelTask, setCancelTask] = useState<(() => void) | null>(null);
+
+  useGenerationGuard(isGenerating);
 
   useEffect(() => {
     if (!prefill) return;

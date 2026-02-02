@@ -14,6 +14,7 @@ import { decodeAudioMetadata, concatAudioBuffers, encodeWav } from "@/lib/audio"
 import { splitTextSmart } from "@/lib/split";
 import { GenerationResult, VoiceCloneSettings } from "@/lib/types";
 import { ResultCard } from "@/components/result-card";
+import { useGenerationGuard } from "@/components/generation-guard";
 
 const schema = z.object({
   targetText: z.string().min(1, "Target text is required"),
@@ -65,6 +66,8 @@ export function VoiceCloneForm({
   const [cancelTask, setCancelTask] = useState<(() => void) | null>(null);
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useGenerationGuard(isGenerating);
 
   useEffect(() => {
     if (!prefill) return;

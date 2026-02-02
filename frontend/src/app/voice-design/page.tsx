@@ -14,12 +14,13 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { AudioPlayer } from "@/components/audio-player";
-import { ComparePanel } from "@/components/compare-panel";
+import { ComparePanel, type ComparePanelHandle } from "@/components/compare-panel";
 import { apiClient } from "@/lib/api";
 import { LANGUAGES, voiceDesignSchema } from "@/lib/validators";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { RequestQueue } from "@/lib/queue";
+import { useGenerationGuard } from "@/components/generation-guard";
 
 const VOICE_PRESETS = [
     {
@@ -56,13 +57,18 @@ const VOICE_PRESETS = [
 
 export default function VoiceDesignPage() {
     const compareQueueRef = React.useRef(new RequestQueue(1));
+    const comparePanelRef = React.useRef<ComparePanelHandle | null>(null);
+    const compareCancelRef = React.useRef<(() => void) | null>(null);
     const [compareMode, setCompareMode] = React.useState(false);
     const [text, setText] = React.useState("");
     const [language, setLanguage] = React.useState("Auto");
     const [voiceDescription, setVoiceDescription] = React.useState("");
     const [isGenerating, setIsGenerating] = React.useState(false);
+    const [isCompareGenerating, setIsCompareGenerating] = React.useState(false);
     const [audioUrl, setAudioUrl] = React.useState<string | null>(null);
     const [audioBlob, setAudioBlob] = React.useState<Blob | null>(null);
+
+    useGenerationGuard(isGenerating || isCompareGenerating);
 
     const handleGenerate = async () => {
         const validation = voiceDesignSchema.safeParse({
@@ -109,6 +115,22 @@ export default function VoiceDesignPage() {
     const handleCancel = () => {
         apiClient.cancel();
         setIsGenerating(false);
+    };
+
+    const handlePrimaryGenerate = () => {
+        if (compareMode) {
+            comparePanelRef.current?.generate();
+            return;
+        }
+        void handleGenerate();
+    };
+
+    const handlePrimaryCancel = () => {
+        if (compareMode) {
+            compareCancelRef.current?.();
+            return;
+        }
+        handleCancel();
     };
 
     return (
@@ -190,11 +212,24 @@ export default function VoiceDesignPage() {
                             variant="gradient"
                             size="lg"
                             className="flex-1"
-                            onClick={handleGenerate}
-                            loading={isGenerating}
-                            disabled={!text || !voiceDescription}
+                            onClick={handlePrimaryGenerate}
+                            loading={compareMode ? isCompareGenerating : isGenerating}
+                            disabled={
+                                !text ||
+                                (!compareMode && !voiceDescription) ||
+                                (compareMode ? isCompareGenerating : isGenerating)
+                            }
                         >
-                            {isGenerating ? (
+                            {compareMode ? (
+                                isCompareGenerating ? (
+                                    "Generating..."
+                                ) : (
+                                    <>
+                                        <Wand2 className="h-4 w-4 mr-2" />
+                                        Generate Voice
+                                    </>
+                                )
+                            ) : isGenerating ? (
                                 "Generating..."
                             ) : (
                                 <>
@@ -206,12 +241,17 @@ export default function VoiceDesignPage() {
                         <Button
                             variant="outline"
                             size="lg"
+                            title={
+                                compareMode
+                                    ? "Generates one audio output with the current settings."
+                                    : "Generates audio more than once with different settings if you want."
+                            }
                             onClick={() => setCompareMode((prev) => !prev)}
                         >
-                            {compareMode ? "Single Mode" : "Compare"}
+                            {compareMode ? "Single Mode" : "Multi Mode"}
                         </Button>
-                        {isGenerating && (
-                            <Button variant="outline" size="lg" onClick={handleCancel}>
+                        {(compareMode ? isCompareGenerating : isGenerating) && (
+                            <Button variant="outline" size="lg" onClick={handlePrimaryCancel}>
                                 Cancel
                             </Button>
                         )}
@@ -264,8 +304,9 @@ export default function VoiceDesignPage() {
                     {/* Output */}
                     {compareMode ? (
                         <div className="space-y-3">
-                            <Label>Compare Variants</Label>
+                            <Label>Multi Mode Variants</Label>
                             <ComparePanel
+                                ref={comparePanelRef}
                                 queue={compareQueueRef.current}
                                 modeOverride="voiceDesign"
                                 hideModeSelect
@@ -273,6 +314,10 @@ export default function VoiceDesignPage() {
                                 sharedText={text}
                                 sharedLanguage={language}
                                 primaryVariant={{ voiceDescription }}
+                                onGeneratingChange={setIsCompareGenerating}
+                                onCancelAvailable={(cancel) => {
+                                    compareCancelRef.current = cancel;
+                                }}
                             />
                         </div>
                     ) : (
