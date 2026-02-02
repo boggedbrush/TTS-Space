@@ -1,25 +1,16 @@
 import type { VoiceDesignInput, VoiceCloneInput, CustomVoiceInput } from "./validators";
 
-// Use the current hostname so clients on LAN can access the backend
-// The backend is exposed on port 8000
 const getApiBase = () => {
     if (typeof window === "undefined") return "/api";
 
     // Use explicit API URL if configured (for tunnels/remote)
-    // This enables using Cloudflare Tunnels where backend is on a different URL
-    if (process.env.NEXT_PUBLIC_API_URL) {
-        return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+    const explicitApiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (explicitApiUrl) {
+        return explicitApiUrl.replace(/\/$/, "");
     }
 
-    // Use relative path if proxying through same origin or in Docker
-    // This covers production deployments and Docker Compose
-    if (window.location.hostname !== "localhost" &&
-        window.location.hostname !== "127.0.0.1") {
-        return "/api";
-    }
-
-    // Development mode fallback - point to default backend port
-    return `http://${window.location.hostname}:8000/api`;
+    // Default to same-origin API proxy route
+    return "/api";
 };
 
 const API_BASE = getApiBase();

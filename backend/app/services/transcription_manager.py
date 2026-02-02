@@ -66,12 +66,22 @@ class TranscriptionManager:
 
                     # Use whisper-base for good balance of speed and accuracy
                     dtype = torch.float16 if self._device.startswith("cuda") else torch.float32
-                    self._pipeline = pipeline(
-                        "automatic-speech-recognition",
-                        model="openai/whisper-base",
-                        device=self._device,
-                        torch_dtype=dtype,
-                    )
+                    pipeline_kwargs = {
+                        "task": "automatic-speech-recognition",
+                        "model": "openai/whisper-base",
+                        "device": self._device,
+                    }
+
+                    try:
+                        self._pipeline = pipeline(
+                            **pipeline_kwargs,
+                            dtype=dtype,
+                        )
+                    except TypeError:
+                        self._pipeline = pipeline(
+                            **pipeline_kwargs,
+                            torch_dtype=dtype,
+                        )
                     
                     logger.info("Whisper model loaded successfully")
                     status_manager.success("Transcription model loaded")
@@ -135,7 +145,6 @@ class TranscriptionManager:
             # First try a straightforward transcription (most reliable for short clips)
             result = pipe(
                 audio_input,
-                return_timestamps=False,
                 generate_kwargs=generate_kwargs,
             )
 
@@ -147,7 +156,6 @@ class TranscriptionManager:
                     audio_input,
                     chunk_length_s=15,
                     stride_length_s=3,
-                    return_timestamps=False,
                     generate_kwargs=generate_kwargs,
                 )
                 chunk_text = chunked.get("text", "").strip()

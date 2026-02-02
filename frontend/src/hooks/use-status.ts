@@ -16,24 +16,17 @@ interface UseStatusOptions {
     reconnectDelayMs?: number;
 }
 
-// Use the current hostname so clients on LAN can access the backend
-// Use the current hostname so clients on LAN can access the backend
 const getApiBase = () => {
     if (typeof window === "undefined") return "";
 
     // Use explicit API URL if configured (for tunnels/remote)
-    if (process.env.NEXT_PUBLIC_API_URL) {
-        return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+    const explicitApiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (explicitApiUrl) {
+        return explicitApiUrl.replace(/\/$/, "");
     }
 
-    // Use relative path if proxying through same origin or in Docker
-    if (window.location.hostname !== "localhost" &&
-        window.location.hostname !== "127.0.0.1") {
-        return "/api";
-    }
-
-    // Development mode fallback
-    return `http://${window.location.hostname}:8000/api`;
+    // Default to same-origin API proxy route
+    return "/api";
 };
 
 export function useStatus(options: UseStatusOptions = {}) {

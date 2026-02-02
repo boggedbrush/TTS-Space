@@ -1,3 +1,14 @@
+const allowedDevOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.NEXT_PUBLIC_WEB_ORIGIN,
+    process.env.NEXT_PUBLIC_URL,
+    ...((process.env.NEXT_ALLOWED_DEV_ORIGINS || "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)),
+].filter(Boolean);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     output: 'standalone',
@@ -7,16 +18,7 @@ const nextConfig = {
             bodySizeLimit: '10mb',
         },
     },
-    async rewrites() {
-        // Use backend service name in Docker, localhost in development
-        const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
-        return [
-            {
-                source: '/api/:path*',
-                destination: `${backendUrl}/api/:path*`,
-            },
-        ];
-    },
+    allowedDevOrigins,
 };
 
 export default nextConfig;

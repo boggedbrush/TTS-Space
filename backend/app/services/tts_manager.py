@@ -93,12 +93,23 @@ class TTSManager:
                         except ImportError:
                             attn_impl = "sdpa"  # Fallback to scaled dot product attention
 
-                    model = Qwen3TTSModel.from_pretrained(
-                        model_id,
-                        device_map=self._device,
-                        torch_dtype=self._dtype,
-                        attn_implementation=attn_impl,
-                    )
+                    load_kwargs = {
+                        "device_map": self._device,
+                        "attn_implementation": attn_impl,
+                    }
+
+                    try:
+                        model = Qwen3TTSModel.from_pretrained(
+                            model_id,
+                            dtype=self._dtype,
+                            **load_kwargs,
+                        )
+                    except TypeError:
+                        model = Qwen3TTSModel.from_pretrained(
+                            model_id,
+                            torch_dtype=self._dtype,
+                            **load_kwargs,
+                        )
                     self._models[model_key] = model
                     logger.info(f"Model loaded: {model_id}")
                     status_manager.success(f"Model loaded: {model_id}")
