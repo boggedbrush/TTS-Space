@@ -37,6 +37,9 @@ export const metadata: Metadata = {
         description: "Premium AI Text-to-Speech with Voice Design and Cloning",
         type: "website",
     },
+    icons: {
+        icon: "/favicon.svg",
+    },
 };
 
 export default function RootLayout({
